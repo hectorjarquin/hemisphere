@@ -10,8 +10,23 @@ A persistent, searchable memory store for AI agents. Gives LLMs long-term recall
 
 ## Quick Start
 
+```bash
+npm install -g hemisphere
 ```
-npm install
+
+Once installed, run the dashboard:
+
+```bash
+hemisphere
+# → http://localhost:3456
+```
+
+### CLI commands
+
+```bash
+hemisphere              # Start the dashboard
+hemisphere stop         # Stop a running instance
+hemisphere restart      # Stop then restart
 ```
 
 ### MCP server
@@ -23,12 +38,14 @@ Add to `opencode.json`:
   "mcp": {
     "hemisphere": {
       "type": "local",
-      "command": ["node", "/path/to/hemisphere/index.js"],
+      "command": ["node", "/home/user/.nvm/versions/node/v22.22.0/lib/node_modules/hemisphere/index.js"],
       "enabled": true
     }
   }
 }
 ```
+
+Find your exact path with `npm root -g` — append `/hemisphere/index.js` (e.g. `/usr/lib/node_modules/hemisphere/index.js`).
 
 Now your agent can store and retrieve memories:
 
@@ -39,13 +56,7 @@ Search: "what's our connection pooling setup?"
 
 ### Dashboard
 
-Browse, search and manage memories visually:
-
-```bash
-npm start
-# or: node dashboard.js
-# → http://localhost:3456
-```
+Browse, search and manage memories visually at `http://localhost:3456`.
 
 Port configurable via `~/.hemisphere/config.json` or `HEMISPHERE_PORT`.
 
@@ -58,12 +69,21 @@ Port configurable via `~/.hemisphere/config.json` or `HEMISPHERE_PORT`.
 - Node.js 18+
 - C++ build tools (`build-essential` on Debian/Ubuntu, Xcode CLI tools on macOS) — required to compile `better-sqlite3`
 
-### Setup
+### From npm (recommended)
+
+```bash
+npm install -g hemisphere
+```
+
+The `hemisphere` CLI is now available globally. The MCP server runs via your AI client — see [Configuration](#configuration-1).
+
+### From git
 
 ```bash
 git clone https://github.com/hectorjarquin/hemisphere.git ~/hemisphere
 cd ~/hemisphere
 npm install
+npm link  # creates global `hemisphere` command
 ```
 
 ### Configuration
@@ -73,12 +93,14 @@ npm install
   "mcp": {
     "hemisphere": {
       "type": "local",
-      "command": ["node", "/path/to/hemisphere/index.js"],
+      "command": ["node", "/usr/lib/node_modules/hemisphere/index.js"],
       "enabled": true
     }
   }
 }
 ```
+
+Find your exact path with `npm root -g` — append `/hemisphere/index.js`. For nvm users the path is typically `~/.nvm/versions/node/vX/lib/node_modules/hemisphere/index.js`.
 
 Memories are scoped by **project** — searching under `my-plugin` won't return memories from `my-theme`.
 
@@ -232,7 +254,6 @@ Create an optional JSON config file to customize operational settings. All keys 
   "retention": {
     "days": {
       "note": 30,
-      "report": 90,
       "plan": 180,
       "decision": 0,
       "fact": 0,
@@ -351,11 +372,15 @@ hemisphere/
 
 ### Scripts
 
+For local development (after `git clone`):
+
 ```bash
-npm start           # Start dashboard server
-npm run stop        # Stop server on HEMISPHERE_PORT (default 3456)
-npm run restart     # Stop, wait, then start again
+npm start           # Start dashboard server (same as `hemisphere`)
+npm run stop        # Stop running instance (same as `hemisphere stop`)
+npm run restart     # Stop then start
 ```
+
+For installed users, the global `hemisphere` CLI handles these — see [Quick Start](#quick-start).
 
 ### Testing the MCP server
 
