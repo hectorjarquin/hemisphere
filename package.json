@@ -4,10 +4,13 @@
   "description": "Lightweight memory MCP server with hybrid FTS + vector search",
   "type": "module",
   "license": "GPL-3.0-only",
-  "repository": "github:hectorjarquin/hemisphere",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hectorjarquin/hemisphere.git"
+  },
   "main": "index.js",
   "bin": {
-    "hemisphere": "./dashboard.js"
+    "hemisphere": "dashboard.js"
   },
   "scripts": {
     "start": "node dashboard.js",
