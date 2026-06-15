@@ -1,6 +1,6 @@
 {
   "name": "hemisphere",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Lightweight memory MCP server with hybrid FTS + vector search",
   "type": "module",
   "license": "GPL-3.0-only",
