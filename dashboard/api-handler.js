@@ -1,4 +1,4 @@
-import { searchHybrid, deleteMemory, restoreMemory, purgeExpired, doBackup, listBackups, enforceLiveRetention } from '../db.js';
+import { searchHybrid, trashMemory, restoreMemory, purgeExpired, doBackup, listBackups, enforceLiveRetention, deleteMemoryPermanent, trashProject, deleteProject, reassignMemories } from '../db.js';
 import { getConfig } from '../config.js';
 
 export function json(data, status = 200) {
@@ -78,7 +78,7 @@ export function createApiHandler(db) {
       const id = parseInt(deleteMatch[1], 10);
       const project = params.get('project') || '';
       if (!id || !project) return err('Missing id or project', 400);
-      const deleted = deleteMemory(project, id);
+      const deleted = trashMemory(project, id);
       return json({ deleted });
     }
 
@@ -109,6 +109,53 @@ export function createApiHandler(db) {
     if (path === '/api/retention' && method === 'POST') {
       const purged = enforceLiveRetention();
       return json({ purged });
+    }
+
+    const purgeMatch = path.match(/^\/api\/memories\/(\d+)\/purge$/);
+    if (purgeMatch && method === 'DELETE') {
+      const id = parseInt(purgeMatch[1], 10);
+      const project = params.get('project') || '';
+      const force = params.get('force') === '1';
+      if (!id || !project) return err('Missing id or project', 400);
+      try {
+        const purged = deleteMemoryPermanent(project, id, force);
+        return json({ purged });
+      } catch (e) {
+        return err(e.message, 400);
+      }
+    }
+
+    if (path === '/api/project/trash' && method === 'POST') {
+      const project = params.get('project') || '';
+      if (!project) return err('Missing project', 400);
+      try {
+        const trashed = trashProject(project);
+        return json({ trashed });
+      } catch (e) {
+        return err(e.message, 400);
+      }
+    }
+
+    if (path === '/api/project/purge' && method === 'DELETE') {
+      const project = params.get('project') || '';
+      const force = params.get('force') === '1';
+      if (!project) return err('Missing project', 400);
+      try {
+        const purged = deleteProject(project, force);
+        return json({ purged: purged.changes });
+      } catch (e) {
+        return err(e.message, 400);
+      }
+    }
+
+    if (path === '/api/reassign' && method === 'POST') {
+      const fromProject = params.get('from') || '';
+      const toProject = params.get('to') || '';
+      const idsRaw = params.get('ids') || '';
+      if (!fromProject || !toProject) return err('Missing from or to project', 400);
+      const ids = idsRaw ? idsRaw.split(',').map(Number).filter(n => n > 0) : undefined;
+      const result = reassignMemories(fromProject, toProject, ids);
+      return json({ moved: result.changes });
     }
 
     return null;

@@ -413,11 +413,117 @@ export function updateMemory({ id, project, kind, content, metadata, related_ids
   return false;
 }
 
-export function deleteMemory(project, id) {
+export function trashMemory(project, id) {
   const d = initDb();
   const result = d.prepare('UPDATE memories SET deleted_at = unixepoch() WHERE id = ? AND project = ? AND deleted_at IS NULL').run(id, project);
   if (result.changes > 0) recordWrite();
   return result.changes > 0;
+}
+
+export function deleteMemory(project, id) {
+  return trashMemory(project, id);
+}
+
+export function listProjects() {
+  const d = initDb();
+  return d.prepare('SELECT DISTINCT project FROM memories ORDER BY project').all().map(r => r.project);
+}
+
+export function countProject(project) {
+  const d = initDb();
+  const rows = d.prepare(
+    'SELECT kind, COUNT(*) as count FROM memories WHERE project = ? AND deleted_at IS NULL GROUP BY kind'
+  ).all(project);
+  const counts = {};
+  let total = 0;
+  for (const r of rows) {
+    counts[r.kind || '(empty)'] = r.count;
+    total += r.count;
+  }
+  counts.total = total;
+  return counts;
+}
+
+export function trashProject(project) {
+  const d = initDb();
+  const active = d.prepare(
+    'SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL'
+  ).get(project);
+  if (active.c === 0) {
+    throw new Error(
+      `Project '${project}' has no non-trashed memories to trash.`
+    );
+  }
+  const result = d.prepare(
+    'UPDATE memories SET deleted_at = unixepoch() WHERE project = ? AND deleted_at IS NULL'
+  ).run(project);
+  d.exec("INSERT INTO memories_fts(memories_fts, rank) VALUES('optimize', 0)");
+  recordWrite();
+  return result.changes;
+}
+
+export function deleteProject(project, force) {
+  const d = initDb();
+
+  const total = d.prepare(
+    'SELECT COUNT(*) as c FROM memories WHERE project = ?'
+  ).get(project);
+  if (total.c === 0) {
+    throw new Error(`Project '${project}' has no memories.`);
+  }
+
+  if (!force) {
+    const active = d.prepare(
+      'SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL'
+    ).get(project);
+    if (active.c > 0) {
+      throw new Error(
+        `Project '${project}' has ${active.c} non-trashed memories. Trash them first or use force=true.`
+      );
+    }
+  }
+
+  const result = d.prepare('DELETE FROM memories WHERE project = ?').run(project);
+  d.exec("INSERT INTO memories_fts(memories_fts, rank) VALUES('optimize', 0)");
+  recordWrite();
+  return result.changes;
+}
+
+export function deleteMemoryPermanent(project, id, force) {
+  const d = initDb();
+  if (!force) {
+    const existing = d.prepare(
+      'SELECT id FROM memories WHERE id = ? AND project = ? AND deleted_at IS NOT NULL'
+    ).get(id, project);
+    if (!existing) {
+      throw new Error(
+        `Memory #${id} is not in trash. Trash it first or use force=true.`
+      );
+    }
+  }
+  const result = d.prepare('DELETE FROM memories WHERE id = ? AND project = ?').run(id, project);
+  if (result.changes > 0) {
+    d.exec("INSERT INTO memories_fts(memories_fts, rank) VALUES('optimize', 0)");
+    recordWrite();
+  }
+  return result.changes > 0;
+}
+
+export function reassignMemories(fromProject, toProject, ids) {
+  const d = initDb();
+  let result;
+  if (ids && Array.isArray(ids) && ids.length > 0) {
+    const placeholders = ids.map(() => '?').join(',');
+    result = d.prepare(
+      `UPDATE memories SET project = ?, updated_at = unixepoch() WHERE project = ? AND id IN (${placeholders})`
+    ).run(toProject, fromProject, ...ids);
+  } else {
+    result = d.prepare(
+      'UPDATE memories SET project = ?, updated_at = unixepoch() WHERE project = ?'
+    ).run(toProject, fromProject);
+  }
+  if (result.changes > 0) recordWrite();
+  return result.changes;
 }
 
 export function restoreMemory(project, id) {

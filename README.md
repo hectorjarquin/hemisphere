@@ -1,6 +1,6 @@
 <img src="logo.svg" height="48" alt="" />
 
-# hemisphere
+# Hemisphere
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
@@ -125,7 +125,7 @@ Hybrid FTS + vector search with weighted scoring.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `project` | string | yes | — | Project to search within |
+| `project` | string | no | — | Project to search within. Omit for cross-project search. |
 | `query` | string | yes | — | Search text |
 | `limit` | number | no | `10` | Max results |
 | `alpha` | number | no | `0.3` | Vector weight. `0` = FTS-only, `1` = vector-only |
@@ -138,7 +138,7 @@ Same as `memory_search` but returns plain text formatted for prompt injection.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `project` | string | yes | — | Project to search within |
+| `project` | string | no | — | Project to search within. Omit for cross-project search. |
 | `query` | string | yes | — | Search text |
 | `limit` | number | no | `10` | Max results |
 
@@ -156,11 +156,21 @@ List recent memories, optionally filtered by kind.
 |-----------|------|----------|---------|-------------|
 | `project` | string | yes | — | Project namespace |
 | `kind` | string | no | — | Optional kind filter |
+| `trash` | boolean | no | `false` | If true, list soft-deleted memories |
 | `limit` | number | no | `20` | Max results |
 
-### `memory_delete`
+### `memory_trash`
 
-Delete a memory by ID (scoped to project).
+Soft-delete a memory by ID (scoped to project). Sets `deleted_at`; recoverable via `memory_restore`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | yes | — | Project namespace |
+| `id` | number | yes | — | Memory ID to soft-delete |
+
+### `memory_delete` (deprecated)
+
+**DEPRECATED:** Use `memory_trash` instead. Will be removed in v3.0.0.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -182,6 +192,66 @@ Update an existing memory by ID (scoped to project). Pass only the fields to cha
 | `metadata` | object | no | — | Fields to merge (existing metadata merged, re-normalized to kind schema, `updated_at` auto-bumped) |
 
 Returns `{ updated: true/false }`.
+
+### `memory_purge`
+
+Permanently delete a memory by ID. By default requires the memory to be in trash first.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | yes | — | Project namespace |
+| `id` | number | yes | — | Memory ID to permanently delete |
+| `force` | boolean | no | `false` | Bypass trash requirement |
+
+### `memory_restore`
+
+Restore a soft-deleted memory from trash.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | yes | — | Project namespace |
+| `id` | number | yes | — | Memory ID to restore |
+
+### `memory_reassign`
+
+Move memories from one project to another.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `from_project` | string | yes | — | Source project namespace |
+| `to_project` | string | yes | — | Destination project namespace |
+| `ids` | number[] | no | — | Specific IDs to move. Omit to move all. |
+
+### `project_list`
+
+List all project namespaces with stored memories. No parameters.
+
+### `project_count`
+
+Count non-trashed memories in a project, grouped by kind.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | yes | — | Project namespace |
+
+Returns `{ total: N, kind1: N1, kind2: N2, ... }`.
+
+### `project_trash`
+
+Soft-delete all non-trashed memories in a project (recoverable). Refuses if the project already has no non-trashed memories.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | yes | — | Project namespace to trash |
+
+### `project_purge`
+
+Permanently delete a project and all its memories.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | yes | — | Project namespace to purge |
+| `force` | boolean | no | `false` | Bypass trash requirement |
 
 ### `memory_progressive_summary`
 
@@ -339,7 +409,7 @@ Three indexing layers work together:
 
 Memories flow through three protection layers before permanent removal:
 
-1. **Soft-Delete** (`deleted_at`) — `memory_delete` sets a timestamp instead of removing the row. Memories are hidden from normal queries but recoverable via restore.
+1. **Soft-Delete** (`deleted_at`) — `memory_trash` sets a timestamp instead of removing the row. Memories are hidden from normal queries but recoverable via restore.
 2. **Write-Count Snapshots** — Every N writes (configurable via `backup.intervalWrites`), `VACUUM INTO` creates a timestamped `.db` backup. Oldest backups are rotated when exceeding `backup.retentionCount`.
 3. **Per-Kind Retention** — `enforceLiveRetention()` runs on dashboard startup and on-demand, purging active memories older than their kind's configured days. At least one `progressive_summary` is always preserved to maintain the dual-trigger threshold.
 
@@ -347,7 +417,7 @@ Soft-deleted memories are permanently purged after `retention.trashPurgeDays` da
 
 ### SSE Real-Time Updates
 
-The dashboard uses native Server-Sent Events for live updates — no polling. The MCP server calls `notifyDash()` after every `memory_store`, `memory_update`, and `memory_delete`, which POSTs to the dashboard's `/api/notify` endpoint. The dashboard broadcasts the event to all connected SSE clients via `/api/events`. If the SSE connection drops, a 30-second fallback poll resumes until the connection is re-established.
+The dashboard uses native Server-Sent Events for live updates — no polling. The MCP server calls `notifyDash()` after every `memory_store`, `memory_update`, `memory_trash`, and `memory_delete`, which POSTs to the dashboard's `/api/notify` endpoint. The dashboard broadcasts the event to all connected SSE clients via `/api/events`. If the SSE connection drops, a 30-second fallback poll resumes until the connection is re-established.
 
 ## Project Structure
 
@@ -397,7 +467,7 @@ npx @modelcontextprotocol/inspector node index.js
 - **Connection pooling** — WAL-mode write queue for concurrent agent access
 - **Rate limiting / resource governance** — per-project limits and content caps
 - **Multi-agent collaboration** — shared memory spaces with access controls
-- **Import / export** — portable memory archives across hemisphere instances
+- **Import / export** — portable memory archives across Hemisphere instances
 
 ## Contributing
 

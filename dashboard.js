@@ -27,7 +27,7 @@ function killOnPort(port) {
 
 if (arg === 'stop') {
   killOnPort(PORT);
-  console.log('hemisphere stopped');
+  console.log('Hemisphere stopped');
   process.exit(0);
 }
 if (arg === 'restart') {
@@ -142,7 +142,11 @@ const server = http.createServer((req, res) => {
         }
         const deleteMatch = pathname.match(/^\/api\/memories\/(\d+)$/);
         if (deleteMatch && req.method === 'DELETE') {
-          broadcast('memory_delete', { id: parseInt(deleteMatch[1], 10), project: params.get('project') || '' });
+          broadcast('memory_trash', { id: parseInt(deleteMatch[1], 10), project: params.get('project') || '' });
+        }
+        const purgeMatch = pathname.match(/^\/api\/memories\/(\d+)\/purge$/);
+        if (purgeMatch && req.method === 'DELETE') {
+          broadcast('memory_purge', { id: parseInt(purgeMatch[1], 10), project: params.get('project') || '' });
         }
       }
 

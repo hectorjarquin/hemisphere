@@ -63,7 +63,7 @@ function readConfigFile() {
     if (!raw) return {};
     return JSON.parse(raw);
   } catch (e) {
-    console.warn('hemisphere: config.json parse error \u2014 using defaults:', e.message);
+    console.warn('Hemisphere: config.json parse error \u2014 using defaults:', e.message);
     return {};
   }
 }
@@ -104,7 +104,7 @@ function applyEnvOverrides(cfg) {
       }
       Object.assign(cfg.retention.days, days);
     } catch (e) {
-      console.warn('hemisphere: RETENTION_POLICY parse error \u2014 using defaults:', e.message);
+      console.warn('Hemisphere: RETENTION_POLICY parse error \u2014 using defaults:', e.message);
     }
   }
 }

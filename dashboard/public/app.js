@@ -206,7 +206,7 @@ async function loadMemories() {
       + '<td class="time-cell" title="' + new Date((m.updated_at || m.created_at || 0) * 1000).toISOString().slice(0, 19).replace('T', ' ') + '">' + timeAgo(m.updated_at || m.created_at) + '</td>'
       + '<td>' + (state.trash ?
         '<button class="restore-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Restore memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M480-120q-138 0-240.5-91.5T122-440h82q14 104 92.5 172T480-200q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h110v80H120v-240h80v94q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm112-192L440-464v-216h80v184l128 128-56 56Z"/></svg></button>'
-        : '<button class="del-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Delete memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg></button>') + '</td></tr>'
+        : '<button class="del-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Trash memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg></button>') + '</td></tr>'
       + '<tr class="detail-row" data-parent="' + m.id + '" style="display:none"><td colspan="7"><div class="detail"><pre>' + esc(m.content) + '\n\nMetadata: ' + esc(JSON.stringify(m.metadata, null, 2)) + '</pre></div></td></tr>';
   }).join('');
 
@@ -343,19 +343,19 @@ document.getElementById('tbody').addEventListener('click', function (e) {
     const id = delBtn.dataset.id;
     const project = delBtn.dataset.project;
     const dialog = document.getElementById('confirm-dialog');
-    document.getElementById('confirm-message').textContent = 'Delete memory #' + id + '?';
+    document.getElementById('confirm-message').textContent = 'Trash memory #' + id + '?';
     dialog.showModal();
     document.getElementById('confirm-ok').onclick = function () {
       dialog.close();
       fetch('/api/memories/' + id + '?project=' + encodeURIComponent(project), { method: 'DELETE' })
-        .then(function (r) { if (!r.ok) throw new Error('Delete failed'); return r.json(); })
+        .then(function (r) { if (!r.ok) throw new Error('Trash failed'); return r.json(); })
         .then(function (d) {
           if (d.deleted) {
-            toast('Memory #' + id + ' deleted', 'success');
+            toast('Memory #' + id + ' trashed', 'success');
             loadMemories().catch(showError);
           }
         })
-        .catch(function (err) { toast('Delete failed: ' + err.message, 'error'); });
+        .catch(function (err) { toast('Trash failed: ' + err.message, 'error'); });
     };
     document.getElementById('confirm-cancel').onclick = function () { dialog.close(); };
     return;
@@ -450,7 +450,7 @@ es.addEventListener('memory_update', function (e) {
   } catch (_) {}
 });
 
-es.addEventListener('memory_delete', function (e) {
+es.addEventListener('memory_trash', function (e) {
   try {
     const data = JSON.parse(e.data);
     removeRow(data.id);

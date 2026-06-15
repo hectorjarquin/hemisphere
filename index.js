@@ -4,7 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-import { initDb, storeMemory, searchHybrid, listMemories, deleteMemory, updateMemory } from './db.js';
+import { initDb, storeMemory, searchHybrid, listMemories, trashMemory, deleteMemory, updateMemory, restoreMemory, listProjects, countProject, trashProject, deleteProject, deleteMemoryPermanent, reassignMemories } from './db.js';
 import { getConfig } from './config.js';
 import http from 'node:http';
 
@@ -55,12 +55,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: 'object',
         properties: {
-          project: { type: 'string', description: 'Project namespace to search within' },
+          project: { type: 'string', description: 'Project namespace to search within. Omit for cross-project search.' },
           query: { type: 'string', description: 'Search query text' },
           limit: { type: 'number', description: 'Max results (default 10)' },
           alpha: { type: 'number', description: 'Vector weight 0-1, 0=only FTS, 1=only vector (default 0.3)' }
         },
-        required: ['project', 'query']
+        required: ['query']
       }
     },
     {
@@ -69,11 +69,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: 'object',
         properties: {
-          project: { type: 'string', description: 'Project namespace to search within' },
+          project: { type: 'string', description: 'Project namespace to search within. Omit for cross-project search.' },
           query: { type: 'string', description: 'Search query text' },
           limit: { type: 'number', description: 'Max results (default 10)' }
         },
-        required: ['project', 'query']
+        required: ['query']
       }
     },
     {
@@ -84,14 +84,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           project: { type: 'string', description: 'Project namespace' },
           kind: { type: 'string', description: 'Optional kind filter' },
-          limit: { type: 'number', description: 'Max results (default 20)' }
+          trash: { type: 'boolean', description: 'If true, list soft-deleted memories instead of active ones' },
+          limit: { type: 'number', description: 'Max results (default 20, max 200)' }
         },
         required: ['project']
       }
     },
     {
+      name: 'memory_trash',
+      description: 'Soft-delete a memory by ID (scoped to project). Sets deleted_at; recoverable via memory_restore.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project namespace' },
+          id: { type: 'number', description: 'Memory ID to soft-delete' }
+        },
+        required: ['project', 'id']
+      }
+    },
+    {
       name: 'memory_delete',
-      description: 'Delete a memory by ID (scoped to project)',
+      description: 'DEPRECATED: Use memory_trash instead. Soft-deletes a memory by ID. Will be removed in v3.0.0.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -116,6 +129,87 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           metadata: { type: 'object', description: 'Optional fields to update. Merged with existing metadata, re-normalized to kind schema. updated_at auto-bumped.', additionalProperties: true }
         },
         required: ['id', 'project']
+      }
+    },
+    {
+      name: 'memory_purge',
+      description: 'Permanently delete a memory by ID. By default requires the memory to be in trash first (use force=true to bypass).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project namespace' },
+          id: { type: 'number', description: 'Memory ID to permanently delete' },
+          force: { type: 'boolean', description: 'If true, bypass trash requirement and delete immediately' }
+        },
+        required: ['project', 'id']
+      }
+    },
+    {
+      name: 'memory_restore',
+      description: 'Restore a soft-deleted memory from trash.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project namespace' },
+          id: { type: 'number', description: 'Memory ID to restore' }
+        },
+        required: ['project', 'id']
+      }
+    },
+    {
+      name: 'memory_reassign',
+      description: 'Move memories from one project to another. If ids is provided, only moves those specific memories.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          from_project: { type: 'string', description: 'Source project namespace' },
+          to_project: { type: 'string', description: 'Destination project namespace' },
+          ids: { type: 'array', items: { type: 'number' }, description: 'Optional. Specific memory IDs to move. If omitted, moves all memories from from_project.' }
+        },
+        required: ['from_project', 'to_project']
+      }
+    },
+    {
+      name: 'project_list',
+      description: 'List all project namespaces with stored memories.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    },
+    {
+      name: 'project_count',
+      description: 'Count non-trashed memories in a project, grouped by kind.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project namespace' }
+        },
+        required: ['project']
+      }
+    },
+    {
+      name: 'project_trash',
+      description: 'Soft-delete all non-trashed memories in a project (recoverable). Refuses if the project already has no non-trashed memories.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project namespace to trash' }
+        },
+        required: ['project']
+      }
+    },
+    {
+      name: 'project_purge',
+      description: 'Permanently delete a project and all its memories. By default requires all memories to be in trash first (use force=true to bypass). Refuses if the project does not exist.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project namespace to purge' },
+          force: { type: 'boolean', description: 'If true, bypass trash requirement and permanently delete immediately' }
+        },
+        required: ['project']
       }
     },
     {
@@ -178,15 +272,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memory_list': {
-        const results = listMemories(args);
+        const results = listMemories({ ...args, trash: args.trash || false });
         return {
           content: [{ type: 'text', text: JSON.stringify(results, null, 2) }]
         };
       }
 
+      case 'memory_trash':
       case 'memory_delete': {
         const deleted = deleteMemory(args.project, args.id);
-        if (deleted) notifyDash('memory_delete', args.id, args.project);
+        if (deleted) notifyDash('memory_trash', args.id, args.project);
         return {
           content: [{ type: 'text', text: JSON.stringify({ deleted }) }]
         };
@@ -197,6 +292,60 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (updated) notifyDash('memory_update', args.id, args.project);
         return {
           content: [{ type: 'text', text: JSON.stringify({ updated }) }]
+        };
+      }
+
+      case 'memory_purge': {
+        const purged = deleteMemoryPermanent(args.project, args.id, args.force || false);
+        if (purged) notifyDash('memory_purge', args.id, args.project);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ purged }) }]
+        };
+      }
+
+      case 'memory_restore': {
+        const restored = restoreMemory(args.project, args.id);
+        if (restored) notifyDash('memory_restore', args.id, args.project);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ restored }) }]
+        };
+      }
+
+      case 'memory_reassign': {
+        const moved = reassignMemories(args.from_project, args.to_project, args.ids);
+        notifyDash('memory_reassign', null, args.to_project);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ moved: moved.changes }) }]
+        };
+      }
+
+      case 'project_list': {
+        const projects = listProjects();
+        return {
+          content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }]
+        };
+      }
+
+      case 'project_count': {
+        const counts = countProject(args.project);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(counts, null, 2) }]
+        };
+      }
+
+      case 'project_trash': {
+        const trashed = trashProject(args.project);
+        if (trashed > 0) notifyDash('project_trash', null, args.project);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ trashed }) }]
+        };
+      }
+
+      case 'project_purge': {
+        const purged = deleteProject(args.project, args.force || false);
+        if (purged > 0) notifyDash('project_purge', null, args.project);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ purged: purged.changes }) }]
         };
       }
 
