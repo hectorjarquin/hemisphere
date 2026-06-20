@@ -271,6 +271,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'memory_store': {
         const id = storeMemory(args);
         notifyDash('memory_new', id, args.project);
+        if (countProject(args.project).total === 1) {
+          notifyDash('project_new', null, args.project);
+        }
         return {
           content: [{ type: 'text', text: JSON.stringify({ id, success: true }) }]
         };
@@ -324,7 +327,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'memory_purge': {
         const purged = deleteMemoryPermanent(args.project, args.id, args.force || false);
-        if (purged) notifyDash('memory_purge', args.id, args.project);
+        if (purged) {
+          notifyDash('memory_purge', args.id, args.project);
+          if (countProject(args.project).total === 0) {
+            notifyDash('project_deleted', null, args.project);
+          }
+        }
         return {
           content: [{ type: 'text', text: JSON.stringify({ purged }) }]
         };
@@ -357,8 +365,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'memory_reassign': {
         const moved = reassignMemories(args.from_project, args.to_project, args.ids);
         notifyDash('memory_reassign', null, args.to_project);
+        const srcCounts = countProject(args.from_project);
+        if (srcCounts.total === 0) {
+          notifyDash('project_deleted', null, args.from_project);
+        }
+        const dstCounts = countProject(args.to_project);
+        if (dstCounts.total === moved) {
+          notifyDash('project_new', null, args.to_project);
+        }
         return {
-          content: [{ type: 'text', text: JSON.stringify({ moved: moved.changes }) }]
+          content: [{ type: 'text', text: JSON.stringify({ moved: moved }) }]
         };
       }
 
@@ -386,9 +402,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'project_purge': {
         const purged = deleteProject(args.project, args.force || false);
-        if (purged > 0) notifyDash('project_purge', null, args.project);
+        if (purged > 0) {
+          notifyDash('project_purge', null, args.project);
+          notifyDash('project_deleted', null, args.project);
+        }
         return {
-          content: [{ type: 'text', text: JSON.stringify({ purged: purged.changes }) }]
+          content: [{ type: 'text', text: JSON.stringify({ purged: purged }) }]
         };
       }
 

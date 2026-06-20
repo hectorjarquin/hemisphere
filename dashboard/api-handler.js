@@ -20,11 +20,11 @@ export function createApiHandler(db) {
       const project = params.get('project') || '';
       let total, kinds;
       if (project) {
-        total = db.prepare('SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL').get(project).c;
-        kinds = db.prepare('SELECT DISTINCT kind FROM memories WHERE project = ? AND deleted_at IS NULL ORDER BY kind').all(project).map(r => r.kind).filter(Boolean);
+        total = db.prepare('SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL').get(project).c;
+        kinds = db.prepare('SELECT DISTINCT kind FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL ORDER BY kind').all(project).map(r => r.kind).filter(Boolean);
       } else {
-        total = db.prepare('SELECT COUNT(*) as c FROM memories WHERE deleted_at IS NULL').get().c;
-        kinds = db.prepare('SELECT DISTINCT kind FROM memories WHERE deleted_at IS NULL ORDER BY kind').all().map(r => r.kind).filter(Boolean);
+        total = db.prepare('SELECT COUNT(*) as c FROM memories WHERE deleted_at IS NULL AND archived_at IS NULL').get().c;
+        kinds = db.prepare('SELECT DISTINCT kind FROM memories WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY kind').all().map(r => r.kind).filter(Boolean);
       }
       return json({ total, kinds });
     }
@@ -41,7 +41,7 @@ export function createApiHandler(db) {
 
       if (search.trim()) {
         try {
-          const rows = searchHybrid({ project, query: search, limit, alpha: getConfig().search.alpha });
+          const rows = searchHybrid({ project, query: search, limit, alpha: getConfig().search.alpha, archived });
           return json({ total: rows.length, rows, limit, offset, search: true });
         } catch (e) {
           return err('Search error', 400);
@@ -167,7 +167,7 @@ export function createApiHandler(db) {
       if (!project) return err('Missing project', 400);
       try {
         const purged = deleteProject(project, force);
-        return json({ purged: purged.changes });
+        return json({ purged: purged });
       } catch (e) {
         return err(e.message, 400);
       }
@@ -180,7 +180,7 @@ export function createApiHandler(db) {
       if (!fromProject || !toProject) return err('Missing from or to project', 400);
       const ids = idsRaw ? idsRaw.split(',').map(Number).filter(n => n > 0) : undefined;
       const result = reassignMemories(fromProject, toProject, ids);
-      return json({ moved: result.changes });
+      return json({ moved: result });
     }
 
     return null;

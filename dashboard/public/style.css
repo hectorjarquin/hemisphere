@@ -381,58 +381,74 @@ tbody tr:focus-within {
   margin-left: 6px;
 }
 
-.del-btn {
+.kebab-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.kebab-btn {
   background: none;
-  border: 1px solid color-mix(in srgb, var(--strings) 30%, var(--background));
+  border: 1px solid transparent;
   color: var(--foreground);
   width: 28px;
   height: 28px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: .4;
   transition: all .15s;
+  padding: 0;
 }
 
-.del-btn:hover {
+.kebab-btn:hover,
+.kebab-btn:focus-visible {
   opacity: 1;
-  background: color-mix(in srgb, var(--strings) 15%, var(--background));
+  background: var(--accent);
+  border-color: var(--border);
+  outline: none;
 }
 
-.del-btn:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-  opacity: .8;
+.kebab-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  z-index: 200;
+  min-width: 130px;
+  display: none;
+  overflow: hidden;
 }
 
-.restore-btn {
+.kebab-dropdown.open {
+  display: block;
+}
+
+.kebab-item {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
   background: none;
-  border: 1px solid color-mix(in srgb, var(--info) 30%, var(--background));
+  border: none;
   color: var(--foreground);
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
+  font-size: 13px;
   cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: .4;
-  transition: all .15s;
+  text-align: left;
+  transition: background .1s;
 }
 
-.restore-btn:hover {
-  opacity: 1;
-  background: color-mix(in srgb, var(--info) 15%, var(--background));
+.kebab-item:hover {
+  background: var(--accent);
 }
 
-.restore-btn:focus-visible {
+.kebab-item:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-  opacity: .8;
+  outline-offset: -2px;
+  background: var(--accent);
 }
 
 .time-cell {

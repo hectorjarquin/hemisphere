@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-06-20
+
+### Added
+- Kebab menu (⋮) with context-aware actions per view tier: Archive/Trash (Active), Unarchive/Trash (Archived), Restore/Archive (Trash)
+- SSE broadcasts for archive, unarchive, memory reassign, project trash, and project purge operations
+- Frontend SSE listeners for `memory_purge`, `memory_reassign`, `project_trash`, and `project_purge` events
+- Project lifecycle SSE events: `project_new` fires when a project gains its first memory; `project_deleted` fires when the last memory is removed
+- `archived` parameter on dashboard stats and search queries
+- README: Updating section for npm and git workflows, SSE event table, expanded HTTP API table
+
+### Changed
+- Dashboard stats no longer count archived memories in the Active total
+- `memory_archive` SSE listener now reloads the list when viewing the Archived tier (was previously ignored)
+
+### Fixed
+- `reassignMemories()` / `deleteProject()` return-value bug: callers in `index.js` and `api-handler.js` redundantly accessed `.changes` on already-unwrapped values, breaking `project_new` SSE on reassign and producing empty JSON responses (`{}`)
+
 ## [1.2.0] - 2026-06-19
 
 ### Added

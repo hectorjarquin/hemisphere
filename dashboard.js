@@ -148,6 +148,26 @@ const server = http.createServer((req, res) => {
         if (purgeMatch && req.method === 'DELETE') {
           broadcast('memory_purge', { id: parseInt(purgeMatch[1], 10), project: params.get('project') || '' });
         }
+        const archiveMatch = pathname.match(/^\/api\/memories\/(\d+)\/archive$/);
+        if (archiveMatch && req.method === 'POST') {
+          broadcast('memory_archive', { id: parseInt(archiveMatch[1], 10), project: params.get('project') || '' });
+        }
+        const unarchiveMatch = pathname.match(/^\/api\/memories\/(\d+)\/unarchive$/);
+        if (unarchiveMatch && req.method === 'POST') {
+          broadcast('memory_unarchive', { id: parseInt(unarchiveMatch[1], 10), project: params.get('project') || '' });
+        }
+        const projectPurgeMatch = pathname.match(/^\/api\/project\/purge$/);
+        if (projectPurgeMatch && req.method === 'DELETE') {
+          broadcast('project_deleted', { id: null, project: params.get('project') || '' });
+        }
+        const projectTrashMatch = pathname.match(/^\/api\/project\/trash$/);
+        if (projectTrashMatch && req.method === 'POST') {
+          broadcast('project_trash', { id: null, project: params.get('project') || '' });
+        }
+        const reassignMatch = pathname.match(/^\/api\/reassign$/);
+        if (reassignMatch && req.method === 'POST') {
+          broadcast('memory_reassign', { from: params.get('from') || '', to: params.get('to') || '' });
+        }
       }
 
       res.writeHead(result.status, result.headers);

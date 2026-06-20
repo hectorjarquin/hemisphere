@@ -205,11 +205,16 @@ async function loadMemories() {
       + '<td class="content-cell">' + esc(m.content) + (m.score !== undefined ? ' <span class="score" title="score: ' + m.score.toFixed(4) + '">' + m.score.toFixed(2) + '</span>' : '') + '</td>'
       + '<td class="status-cell">' + (m.status ? '<span class="status-badge status-' + m.status.replace(/[^a-z0-9]/g, '-') + '">' + esc(m.status) + '</span>' : '<span class="related-none">\u2014</span>') + '</td>'
       + '<td class="time-cell" title="' + new Date((m.updated_at || m.created_at || 0) * 1000).toISOString().slice(0, 19).replace('T', ' ') + '">' + timeAgo(m.updated_at || m.created_at) + '</td>'
-      + '<td>' + (state.trash ?
-        '<button class="restore-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Restore memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M480-120q-138 0-240.5-91.5T122-440h82q14 104 92.5 172T480-200q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h110v80H120v-240h80v94q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm112-192L440-464v-216h80v184l128 128-56 56Z"/></svg></button>'
-        : state.archived ?
-        '<button class="unarchive-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Unarchive memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M480-120q-138 0-240.5-91.5T122-440h82q14 104 92.5 172T480-200q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h110v80H120v-240h80v94q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm112-192L440-464v-216h80v184l128 128-56 56Z"/></svg></button>'
-        : '<button class="archive-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Archive memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M200-640v440h560v-440H200ZM160-120q-33 0-56.5-23.5T80-200v-520h-40v-80h200v-40h240v40h200v80h40v80h-40v440q0 33-23.5 56.5T600-120H160Zm0-600v440-440Zm40 280h320v-80H200v80Z"/></svg></button>') + '</td></tr>'
+      + '<td><div class="kebab-menu">'
+      + '<button class="kebab-btn" aria-label="Actions"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor" aria-hidden="true"><path d="M480-160q-33 0-56.5-23.5T400-240q0-33 23.5-56.5T480-320q33 0 56.5 23.5T560-240q0 33-23.5 56.5T480-160Zm0-240q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm0-240q-33 0-56.5-23.5T400-720q0-33 23.5-56.5T480-800q33 0 56.5 23.5T560-720q0 33-23.5 56.5T480-640Z"/></svg></button>'
+      + '<div class="kebab-dropdown">'
+      + (state.trash
+        ? '<button class="kebab-item restore-action" data-id="' + m.id + '" data-project="' + esc(m.project) + '">Restore</button><button class="kebab-item archive-action" data-id="' + m.id + '" data-project="' + esc(m.project) + '">Archive</button>'
+        : state.archived
+        ? '<button class="kebab-item unarchive-action" data-id="' + m.id + '" data-project="' + esc(m.project) + '">Unarchive</button><button class="kebab-item trash-action" data-id="' + m.id + '" data-project="' + esc(m.project) + '">Trash</button>'
+        : '<button class="kebab-item archive-action" data-id="' + m.id + '" data-project="' + esc(m.project) + '">Archive</button><button class="kebab-item trash-action" data-id="' + m.id + '" data-project="' + esc(m.project) + '">Trash</button>'
+      )
+      + '</div></div></td></tr>'
       + '<tr class="detail-row" data-parent="' + m.id + '" style="display:none"><td colspan="7"><div class="detail"><pre>' + esc(m.content) + '\n\nMetadata: ' + esc(JSON.stringify(m.metadata, null, 2)) + '</pre></div></td></tr>';
   }).join('');
 
@@ -341,11 +346,74 @@ document.getElementById('search').addEventListener('input', function () {
 });
 
 document.getElementById('tbody').addEventListener('click', function (e) {
-  const delBtn = e.target.closest('.del-btn');
-  if (delBtn) {
+  const kebabBtn = e.target.closest('.kebab-btn');
+  if (kebabBtn) {
     e.stopPropagation();
-    const id = delBtn.dataset.id;
-    const project = delBtn.dataset.project;
+    const menu = kebabBtn.closest('.kebab-menu');
+    const dd = menu.querySelector('.kebab-dropdown');
+    if (dd.classList.contains('open')) {
+      dd.classList.remove('open');
+    } else {
+      document.querySelectorAll('.kebab-dropdown.open').forEach(function (el) { el.classList.remove('open'); });
+      dd.classList.add('open');
+    }
+    return;
+  }
+
+  const archiveItem = e.target.closest('.archive-action');
+  if (archiveItem) {
+    e.stopPropagation();
+    archiveItem.closest('.kebab-dropdown').classList.remove('open');
+    fetch('/api/memories/' + archiveItem.dataset.id + '/archive?project=' + encodeURIComponent(archiveItem.dataset.project), { method: 'POST' })
+      .then(function (r) { if (!r.ok) throw new Error('Archive failed'); return r.json(); })
+      .then(function (d) {
+        if (d.archived) {
+          toast('Memory #' + archiveItem.dataset.id + ' archived', 'success');
+          loadMemories().catch(showError);
+        }
+      })
+      .catch(function (err) { toast('Archive failed: ' + err.message, 'error'); });
+    return;
+  }
+
+  const unarchiveItem = e.target.closest('.unarchive-action');
+  if (unarchiveItem) {
+    e.stopPropagation();
+    unarchiveItem.closest('.kebab-dropdown').classList.remove('open');
+    fetch('/api/memories/' + unarchiveItem.dataset.id + '/unarchive?project=' + encodeURIComponent(unarchiveItem.dataset.project), { method: 'POST' })
+      .then(function (r) { if (!r.ok) throw new Error('Unarchive failed'); return r.json(); })
+      .then(function (d) {
+        if (d.unarchived) {
+          toast('Memory #' + unarchiveItem.dataset.id + ' restored to active', 'success');
+          loadMemories().catch(showError);
+        }
+      })
+      .catch(function (err) { toast('Unarchive failed: ' + err.message, 'error'); });
+    return;
+  }
+
+  const restoreItem = e.target.closest('.restore-action');
+  if (restoreItem) {
+    e.stopPropagation();
+    restoreItem.closest('.kebab-dropdown').classList.remove('open');
+    fetch('/api/memories/' + restoreItem.dataset.id + '/restore?project=' + encodeURIComponent(restoreItem.dataset.project), { method: 'POST' })
+      .then(function (r) { if (!r.ok) throw new Error('Restore failed'); return r.json(); })
+      .then(function (d) {
+        if (d.restored) {
+          toast('Memory #' + restoreItem.dataset.id + ' restored', 'success');
+          loadMemories().catch(showError);
+        }
+      })
+      .catch(function (err) { toast('Restore failed: ' + err.message, 'error'); });
+    return;
+  }
+
+  const trashItem = e.target.closest('.trash-action');
+  if (trashItem) {
+    e.stopPropagation();
+    trashItem.closest('.kebab-dropdown').classList.remove('open');
+    const id = trashItem.dataset.id;
+    const project = trashItem.dataset.project;
     const dialog = document.getElementById('confirm-dialog');
     document.getElementById('confirm-message').textContent = 'Trash memory #' + id + '?';
     dialog.showModal();
@@ -365,54 +433,15 @@ document.getElementById('tbody').addEventListener('click', function (e) {
     return;
   }
 
-  const restoreBtn = e.target.closest('.restore-btn');
-  if (restoreBtn) {
-    e.stopPropagation();
-    fetch('/api/memories/' + restoreBtn.dataset.id + '/restore?project=' + encodeURIComponent(restoreBtn.dataset.project), { method: 'POST' })
-      .then(function (r) { if (!r.ok) throw new Error('Restore failed'); return r.json(); })
-      .then(function (d) {
-        if (d.restored) {
-          toast('Memory #' + restoreBtn.dataset.id + ' restored', 'success');
-          loadMemories().catch(showError);
-        }
-      })
-      .catch(function (err) { toast('Restore failed: ' + err.message, 'error'); });
-    return;
-  }
-
-  const archiveBtn = e.target.closest('.archive-btn');
-  if (archiveBtn) {
-    e.stopPropagation();
-    fetch('/api/memories/' + archiveBtn.dataset.id + '/archive?project=' + encodeURIComponent(archiveBtn.dataset.project), { method: 'POST' })
-      .then(function (r) { if (!r.ok) throw new Error('Archive failed'); return r.json(); })
-      .then(function (d) {
-        if (d.archived) {
-          toast('Memory #' + archiveBtn.dataset.id + ' archived', 'success');
-          loadMemories().catch(showError);
-        }
-      })
-      .catch(function (err) { toast('Archive failed: ' + err.message, 'error'); });
-    return;
-  }
-
-  const unarchiveBtn = e.target.closest('.unarchive-btn');
-  if (unarchiveBtn) {
-    e.stopPropagation();
-    fetch('/api/memories/' + unarchiveBtn.dataset.id + '/unarchive?project=' + encodeURIComponent(unarchiveBtn.dataset.project), { method: 'POST' })
-      .then(function (r) { if (!r.ok) throw new Error('Unarchive failed'); return r.json(); })
-      .then(function (d) {
-        if (d.unarchived) {
-          toast('Memory #' + unarchiveBtn.dataset.id + ' restored to active', 'success');
-          loadMemories().catch(showError);
-        }
-      })
-      .catch(function (err) { toast('Unarchive failed: ' + err.message, 'error'); });
-    return;
-  }
-
   const row = e.target.closest('.memory-row');
   if (row) {
     toggleDetail(row.dataset.id);
+  }
+});
+
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.kebab-menu')) {
+    document.querySelectorAll('.kebab-dropdown.open').forEach(function (el) { el.classList.remove('open'); });
   }
 });
 
@@ -509,6 +538,8 @@ es.addEventListener('memory_archive', function (e) {
     const data = JSON.parse(e.data);
     if (!state.archived) {
       removeRow(data.id);
+    } else {
+      loadMemories().catch(showError);
     }
   } catch (_) {}
 });
@@ -523,6 +554,60 @@ es.addEventListener('memory_unarchive', function (e) {
         loadMemories().catch(showError);
       }
     }
+  } catch (_) {}
+});
+
+es.addEventListener('project_new', function () {
+  loadProjects().catch(showError);
+});
+
+es.addEventListener('project_deleted', function (e) {
+  try {
+    const data = JSON.parse(e.data);
+    if (state.project === data.project) {
+      state.project = '';
+      document.getElementById('project').value = '';
+      loadMemories().catch(showError);
+    }
+    loadProjects().catch(showError);
+  } catch (_) {}
+});
+
+es.addEventListener('memory_purge', function (e) {
+  try {
+    const data = JSON.parse(e.data);
+    removeRow(data.id);
+  } catch (_) {}
+});
+
+es.addEventListener('memory_reassign', function (e) {
+  try {
+    const data = JSON.parse(e.data);
+    if (!state.project || state.project === data.from || state.project === data.to) {
+      loadMemories().catch(showError);
+    }
+    loadProjects().catch(showError);
+  } catch (_) {}
+});
+
+es.addEventListener('project_trash', function (e) {
+  try {
+    const data = JSON.parse(e.data);
+    if (!state.project || state.project === data.project) {
+      loadMemories().catch(showError);
+    }
+  } catch (_) {}
+});
+
+es.addEventListener('project_purge', function (e) {
+  try {
+    const data = JSON.parse(e.data);
+    if (state.project === data.project) {
+      state.project = '';
+      document.getElementById('project').value = '';
+      loadMemories().catch(showError);
+    }
+    loadProjects().catch(showError);
   } catch (_) {}
 });
 

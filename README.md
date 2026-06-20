@@ -104,6 +104,28 @@ Find your exact path with `npm root -g` — append `/hemisphere/index.js`. For n
 
 Memories are scoped by **project** — searching under `my-plugin` won't return memories from `my-theme`.
 
+## Updating
+
+### npm
+
+```bash
+npm install -g hemisphere@latest
+```
+
+Then restart your MCP client (or OpenCode) to pick up the new tools, and run `hemisphere restart` to refresh the dashboard.
+
+Database migrations run automatically on first launch — no manual steps required.
+
+### From git
+
+```bash
+cd ~/hemisphere
+git pull
+npm install
+npm link
+hemisphere restart
+```
+
 ## MCP Tools (Agent-Facing)
 
 ### `memory_store`
@@ -298,8 +320,14 @@ The dashboard exposes REST endpoints:
 | `GET` | `/api/stats` | Get counts grouped by kind and project |
 | `GET` | `/api/memories?project=&kind=&limit=&offset=&trash=` | Paginated memory list. `trash=1` shows soft-deleted. `search=` triggers FTS+vector. |
 | `POST` | `/api/notify` | SSE event relay from MCP server (internal — called by `notifyDash()`) |
-| `DELETE` | `/api/memories?project=&id=` | Soft-delete a memory (sets `deleted_at`) |
-| `POST` | `/api/restore?project=&id=` | Restore a soft-deleted memory (clears `deleted_at`) |
+| `DELETE` | `/api/memories/:id?project=` | Soft-delete a memory (sets `deleted_at`) |
+| `POST` | `/api/memories/:id/restore?project=` | Restore a soft-deleted memory (clears `deleted_at`) |
+| `DELETE` | `/api/memories/:id/purge?project=&force=` | Permanently delete a memory |
+| `POST` | `/api/memories/:id/archive?project=` | Archive a memory |
+| `POST` | `/api/memories/:id/unarchive?project=` | Unarchive a memory |
+| `POST` | `/api/project/trash?project=` | Trash all memories in a project |
+| `DELETE` | `/api/project/purge?project=&force=` | Permanently delete a project |
+| `POST` | `/api/reassign?from=&to=&ids=` | Move memories between projects |
 | `POST` | `/api/purge?days=` | Permanently delete memories soft-deleted longer than `days` ago (default from config or `30`) |
 | `GET` | `/api/backups` | List backup `.db` files |
 | `POST` | `/api/backups` | Trigger an on-demand backup |
@@ -448,7 +476,26 @@ Soft-deleted memories are permanently purged after `retention.trashPurgeDays` da
 
 ### SSE Real-Time Updates
 
-The dashboard uses native Server-Sent Events for live updates — no polling. The MCP server calls `notifyDash()` after every `memory_store`, `memory_update`, `memory_trash`, and `memory_delete`, which POSTs to the dashboard's `/api/notify` endpoint. The dashboard broadcasts the event to all connected SSE clients via `/api/events`. If the SSE connection drops, a 30-second fallback poll resumes until the connection is re-established.
+The dashboard uses Server-Sent Events for live updates — no polling. Events flow through a three-hop chain:
+
+MCP server (index.js) → `notifyDash()` → dashboard `/api/notify` → `broadcast()` → SSE clients → `app.js` listeners
+
+| Event | Source | Frontend Behavior |
+|---|---|---|
+| `memory_new` | `memory_store` | Toast + reload list |
+| `memory_update` | `memory_update` | Reload if row visible |
+| `memory_trash` | `memory_trash` | Animate row removal |
+| `memory_purge` | `memory_purge` | Animate row removal |
+| `memory_restore` | `memory_restore` | Remove from trash / reload active |
+| `memory_archive` | `memory_archive` | Remove from active / reload archived |
+| `memory_unarchive` | `memory_unarchive` | Remove from archived / reload active |
+| `memory_reassign` | `memory_reassign` | Reload list + projects if affected |
+| `project_new` | `memory_store`, `memory_reassign` | Refresh project dropdown |
+| `project_deleted` | `project_purge`, `memory_purge`, `memory_reassign` | Clear current project + refresh dropdown |
+| `project_trash` | `project_trash` | Reload list if affected |
+| `project_purge` | `project_purge` | Clear current project + refresh dropdown |
+
+If the SSE connection drops, a 30-second fallback poll resumes.
 
 ## Project Structure
 
