@@ -129,6 +129,7 @@ Hybrid FTS + vector search with weighted scoring.
 | `query` | string | yes | — | Search text |
 | `limit` | number | no | `10` | Max results |
 | `alpha` | number | no | `0.3` | Vector weight. `0` = FTS-only, `1` = vector-only |
+| `archived` | boolean | no | `false` | If true, search archived memories instead of active ones |
 
 Returns memories sorted by relevance (score 0–1).
 
@@ -141,6 +142,7 @@ Same as `memory_search` but returns plain text formatted for prompt injection.
 | `project` | string | no | — | Project to search within. Omit for cross-project search. |
 | `query` | string | yes | — | Search text |
 | `limit` | number | no | `10` | Max results |
+| `archived` | boolean | no | `false` | If true, search archived memories instead of active ones |
 
 Output:
 ```
@@ -157,6 +159,7 @@ List recent memories, optionally filtered by kind.
 | `project` | string | yes | — | Project namespace |
 | `kind` | string | no | — | Optional kind filter |
 | `trash` | boolean | no | `false` | If true, list soft-deleted memories |
+| `archived` | boolean | no | `false` | If true, list archived memories |
 | `limit` | number | no | `20` | Max results |
 
 ### `memory_trash`
@@ -211,6 +214,24 @@ Restore a soft-deleted memory from trash.
 |-----------|------|----------|---------|-------------|
 | `project` | string | yes | — | Project namespace |
 | `id` | number | yes | — | Memory ID to restore |
+
+### `memory_archive`
+
+Archive a memory by ID. Sets `archived_at`; archived memories are excluded from default list/search/context. Restorable via `memory_unarchive`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | yes | — | Project namespace |
+| `id` | number | yes | — | Memory ID to archive |
+
+### `memory_unarchive`
+
+Restore an archived memory back to active.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | yes | — | Project namespace |
+| `id` | number | yes | — | Memory ID to unarchive |
 
 ### `memory_reassign`
 
@@ -401,19 +422,29 @@ Three indexing layers work together:
 ### Database
 
 - WAL journal mode for concurrent reads, `busy_timeout=5000ms` for write-contention safety across processes
-- `memories` table (project, kind, content, metadata, related_ids, status, created_at, updated_at)
+- `memories` table (project, kind, content, metadata, related_ids, status, created_at, updated_at, deleted_at, archived_at)
 - `memories_fts` — FTS5 external content table
 - `memories_vec` — `vec0` table with `float[256]`
 
 ### Memory Lifecycle
 
-Memories flow through three protection layers before permanent removal:
+Memories move through four tiers:
 
-1. **Soft-Delete** (`deleted_at`) — `memory_trash` sets a timestamp instead of removing the row. Memories are hidden from normal queries but recoverable via restore.
-2. **Write-Count Snapshots** — Every N writes (configurable via `backup.intervalWrites`), `VACUUM INTO` creates a timestamped `.db` backup. Oldest backups are rotated when exceeding `backup.retentionCount`.
-3. **Per-Kind Retention** — `enforceLiveRetention()` runs on dashboard startup and on-demand, purging active memories older than their kind's configured days. At least one `progressive_summary` is always preserved to maintain the dual-trigger threshold.
+| Tier | Column | Filter | Tools |
+|------|--------|--------|-------|
+| **Active** | `deleted_at IS NULL AND archived_at IS NULL` | Default | `memory_store`, `memory_search`, `memory_list`, `memory_update` |
+| **Archived** | `archived_at IS NOT NULL AND deleted_at IS NULL` | `archived=true` | `memory_archive`, `memory_unarchive`, search/list/context with `archived=true` |
+| **Trashed** | `deleted_at IS NOT NULL` | `trash=true` | `memory_trash`, `memory_restore`, list with `trash=true` |
+| **Purged** | Row deleted | — | `memory_purge` |
 
-Soft-deleted memories are permanently purged after `retention.trashPurgeDays` days (default 30) via `/api/purge` or the dashboard's hourly auto-purge.
+Protection layers:
+
+1. **Archive** (`archived_at`) — `memory_archive` preserves memories with historical value outside the active set. Not subject to retention auto-purge. Restorable to active via `memory_unarchive`.
+2. **Soft-Delete** (`deleted_at`) — `memory_trash` sets a timestamp instead of removing the row. Memories are hidden from normal queries but recoverable via restore.
+3. **Write-Count Snapshots** — Every N writes (configurable via `backup.intervalWrites`), `VACUUM INTO` creates a timestamped `.db` backup.
+4. **Per-Kind Retention** — `enforceLiveRetention()` purges active memories older than their kind's configured days. At least one `progressive_summary` is always preserved.
+
+Soft-deleted memories are permanently purged after `retention.trashPurgeDays` days (default 30) via `/api/purge` or the dashboard's hourly auto-purge. Archived memories are not subject to retention auto-purge.
 
 ### SSE Real-Time Updates
 
@@ -423,7 +454,7 @@ The dashboard uses native Server-Sent Events for live updates — no polling. Th
 
 ```
 hemisphere/
-├── index.js                MCP stdio server (7 tool handlers)
+├── index.js                MCP stdio server (9 tool handlers)
 ├── dashboard.js            HTTP dashboard + SSE broadcast server
 ├── dashboard/
 │   ├── api-handler.js      Dashboard REST API routes

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-19
+
+### Added
+- Archive tier: `memory_archive` and `memory_unarchive` tools for preserving memories with historical value outside the active/trash lifecycle
+- `archived` parameter on `memory_list`, `memory_search`, `memory_context` — tier-aware filtering (mirrors `trash` toggle)
+- `archived_at` database column with automatic migration for v1.1.0 users
+- Dashboard: Archived tab in the view filter, archive/unarchive action buttons, SSE event handlers
+
+### Changed
+- `memory_list` active view now excludes archived memories (`deleted_at IS NULL AND archived_at IS NULL`)
+- `memory_search` and `memory_context` default to active-only; pass `archived=true` for archived tier
+
 ## [1.1.0] - 2026-06-15
 
 ### Added

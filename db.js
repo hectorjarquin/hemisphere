@@ -33,7 +33,8 @@ export function initDb() {
       metadata TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
       updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      deleted_at INTEGER DEFAULT NULL
+      deleted_at INTEGER DEFAULT NULL,
+      archived_at INTEGER DEFAULT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project);
@@ -60,6 +61,8 @@ export function initDb() {
   try { db.exec('ALTER TABLE memories ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0'); db.prepare('UPDATE memories SET updated_at = created_at WHERE updated_at = 0').run(); } catch {}
   // Migration: add deleted_at column (ignore if exists)
   try { db.exec('ALTER TABLE memories ADD COLUMN deleted_at INTEGER DEFAULT NULL'); } catch {}
+  // Migration: add archived_at column — v1.2.0 (ignore if exists)
+  try { db.exec('ALTER TABLE memories ADD COLUMN archived_at INTEGER DEFAULT NULL'); } catch {}
 
   return db;
 }
@@ -230,7 +233,7 @@ function sanitizeFtsQuery(query) {
     .join(' ');
 }
 
-export function searchHybrid({ project, query, limit = 10, alpha = 0.3 }) {
+export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived }) {
   const d = initDb();
   if (alpha < 0) alpha = 0;
   if (alpha > 1) alpha = 1;
@@ -247,17 +250,26 @@ export function searchHybrid({ project, query, limit = 10, alpha = 0.3 }) {
     queryBuf = Buffer.from(queryEmbedding.buffer);
   }
 
+  let deletedClause, lookupClause;
+  if (archived) {
+    deletedClause = 'AND m.archived_at IS NOT NULL AND m.deleted_at IS NULL';
+    lookupClause = 'archived_at IS NOT NULL AND deleted_at IS NULL';
+  } else {
+    deletedClause = 'AND m.deleted_at IS NULL AND m.archived_at IS NULL';
+    lookupClause = 'deleted_at IS NULL AND archived_at IS NULL';
+  }
+
   const ftsParams = [ftsQuery];
   const ftsProjectClause = project ? 'AND m.project = ?' : '';
   if (project) ftsParams.push(project);
   ftsParams.push(K);
 
   const ftsResults = d.prepare(`
-    SELECT m.id, m.project, m.kind, m.related_ids, m.status, m.content, m.metadata, m.created_at, m.updated_at, m.deleted_at,
+    SELECT m.id, m.project, m.kind, m.related_ids, m.status, m.content, m.metadata, m.created_at, m.updated_at, m.deleted_at, m.archived_at,
            f.rank as raw_rank
     FROM (SELECT rowid, rank FROM memories_fts WHERE memories_fts MATCH ?) f
     JOIN memories m ON m.id = f.rowid
-    WHERE 1=1 AND m.deleted_at IS NULL ${ftsProjectClause}
+    WHERE 1=1 ${deletedClause} ${ftsProjectClause}
     ORDER BY raw_rank
     LIMIT ?
   `).all(...ftsParams);
@@ -293,7 +305,9 @@ export function searchHybrid({ project, query, limit = 10, alpha = 0.3 }) {
       if (ftsMap.has(id)) {
         ftsMap.get(id).vec_score = norm;
       } else {
-        const lookupSql = project ? 'SELECT * FROM memories WHERE id = ? AND project = ? AND deleted_at IS NULL' : 'SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL';
+        const lookupSql = project
+          ? `SELECT * FROM memories WHERE id = ? AND project = ? AND ${lookupClause}`
+          : `SELECT * FROM memories WHERE id = ? AND ${lookupClause}`;
         const lookupParams = project ? [id, project] : [id];
         const m = d.prepare(lookupSql).get(...lookupParams);
         if (m) {
@@ -328,7 +342,7 @@ export function searchHybrid({ project, query, limit = 10, alpha = 0.3 }) {
   return results;
 }
 
-export function listMemories({ project, kind, trash, limit = 20 }) {
+export function listMemories({ project, kind, trash, archived, limit = 20 }) {
   const d = initDb();
   let sql = 'SELECT * FROM memories WHERE project = ?';
   const params = [project];
@@ -338,10 +352,12 @@ export function listMemories({ project, kind, trash, limit = 20 }) {
     params.push(kind);
   }
 
-  if (trash) {
+  if (archived) {
+    sql += ' AND archived_at IS NOT NULL AND deleted_at IS NULL';
+  } else if (trash) {
     sql += ' AND deleted_at IS NOT NULL';
   } else {
-    sql += ' AND deleted_at IS NULL';
+    sql += ' AND deleted_at IS NULL AND archived_at IS NULL';
   }
 
   sql += ' ORDER BY COALESCE(NULLIF(updated_at, 0), created_at) DESC LIMIT ?';
@@ -529,6 +545,20 @@ export function reassignMemories(fromProject, toProject, ids) {
 export function restoreMemory(project, id) {
   const d = initDb();
   const result = d.prepare('UPDATE memories SET deleted_at = NULL WHERE id = ? AND project = ? AND deleted_at IS NOT NULL').run(id, project);
+  return result.changes > 0;
+}
+
+export function archiveMemory(project, id) {
+  const d = initDb();
+  const result = d.prepare('UPDATE memories SET archived_at = unixepoch() WHERE id = ? AND project = ? AND deleted_at IS NULL AND archived_at IS NULL').run(id, project);
+  if (result.changes > 0) recordWrite();
+  return result.changes > 0;
+}
+
+export function unarchiveMemory(project, id) {
+  const d = initDb();
+  const result = d.prepare('UPDATE memories SET archived_at = NULL WHERE id = ? AND project = ? AND archived_at IS NOT NULL').run(id, project);
+  if (result.changes > 0) recordWrite();
   return result.changes > 0;
 }
 

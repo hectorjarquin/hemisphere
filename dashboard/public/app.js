@@ -1,4 +1,4 @@
-let state = { project: '', kind: '', search: '', trash: false, limit: 20, offset: 0, total: 0 };
+let state = { project: '', kind: '', search: '', trash: false, archived: false, limit: 20, offset: 0, total: 0 };
 let loadVersion = 0;
 let expandedId = null;
 let allProjects = [];
@@ -158,6 +158,7 @@ async function loadMemories() {
   params.set('offset', state.offset);
   if (state.search) params.set('search', state.search);
   if (state.trash) params.set('trash', '1');
+  if (state.archived) params.set('archived', '1');
 
   const r = await fetch('/api/memories?' + params.toString());
   if (!r.ok) throw new Error('Failed to load memories');
@@ -206,7 +207,9 @@ async function loadMemories() {
       + '<td class="time-cell" title="' + new Date((m.updated_at || m.created_at || 0) * 1000).toISOString().slice(0, 19).replace('T', ' ') + '">' + timeAgo(m.updated_at || m.created_at) + '</td>'
       + '<td>' + (state.trash ?
         '<button class="restore-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Restore memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M480-120q-138 0-240.5-91.5T122-440h82q14 104 92.5 172T480-200q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h110v80H120v-240h80v94q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm112-192L440-464v-216h80v184l128 128-56 56Z"/></svg></button>'
-        : '<button class="del-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Trash memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg></button>') + '</td></tr>'
+        : state.archived ?
+        '<button class="unarchive-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Unarchive memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M480-120q-138 0-240.5-91.5T122-440h82q14 104 92.5 172T480-200q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h110v80H120v-240h80v94q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm112-192L440-464v-216h80v184l128 128-56 56Z"/></svg></button>'
+        : '<button class="archive-btn" data-id="' + m.id + '" data-project="' + esc(m.project) + '" aria-label="Archive memory ' + m.id + '"><svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor" aria-hidden="true"><path d="M200-640v440h560v-440H200ZM160-120q-33 0-56.5-23.5T80-200v-520h-40v-80h200v-40h240v40h200v80h40v80h-40v440q0 33-23.5 56.5T600-120H160Zm0-600v440-440Zm40 280h320v-80H200v80Z"/></svg></button>') + '</td></tr>'
       + '<tr class="detail-row" data-parent="' + m.id + '" style="display:none"><td colspan="7"><div class="detail"><pre>' + esc(m.content) + '\n\nMetadata: ' + esc(JSON.stringify(m.metadata, null, 2)) + '</pre></div></td></tr>';
   }).join('');
 
@@ -322,6 +325,7 @@ document.getElementById('kind').addEventListener('change', function () {
 
 document.getElementById('view').addEventListener('change', function () {
   state.trash = this.value === 'recycled';
+  state.archived = this.value === 'archived';
   state.offset = 0;
   loadMemories().catch(showError);
 });
@@ -373,6 +377,36 @@ document.getElementById('tbody').addEventListener('click', function (e) {
         }
       })
       .catch(function (err) { toast('Restore failed: ' + err.message, 'error'); });
+    return;
+  }
+
+  const archiveBtn = e.target.closest('.archive-btn');
+  if (archiveBtn) {
+    e.stopPropagation();
+    fetch('/api/memories/' + archiveBtn.dataset.id + '/archive?project=' + encodeURIComponent(archiveBtn.dataset.project), { method: 'POST' })
+      .then(function (r) { if (!r.ok) throw new Error('Archive failed'); return r.json(); })
+      .then(function (d) {
+        if (d.archived) {
+          toast('Memory #' + archiveBtn.dataset.id + ' archived', 'success');
+          loadMemories().catch(showError);
+        }
+      })
+      .catch(function (err) { toast('Archive failed: ' + err.message, 'error'); });
+    return;
+  }
+
+  const unarchiveBtn = e.target.closest('.unarchive-btn');
+  if (unarchiveBtn) {
+    e.stopPropagation();
+    fetch('/api/memories/' + unarchiveBtn.dataset.id + '/unarchive?project=' + encodeURIComponent(unarchiveBtn.dataset.project), { method: 'POST' })
+      .then(function (r) { if (!r.ok) throw new Error('Unarchive failed'); return r.json(); })
+      .then(function (d) {
+        if (d.unarchived) {
+          toast('Memory #' + unarchiveBtn.dataset.id + ' restored to active', 'success');
+          loadMemories().catch(showError);
+        }
+      })
+      .catch(function (err) { toast('Unarchive failed: ' + err.message, 'error'); });
     return;
   }
 
@@ -461,6 +495,28 @@ es.addEventListener('memory_restore', function (e) {
   try {
     const data = JSON.parse(e.data);
     if (state.trash) {
+      removeRow(data.id);
+    } else {
+      if (!state.project || state.project === data.project || !data.project) {
+        loadMemories().catch(showError);
+      }
+    }
+  } catch (_) {}
+});
+
+es.addEventListener('memory_archive', function (e) {
+  try {
+    const data = JSON.parse(e.data);
+    if (!state.archived) {
+      removeRow(data.id);
+    }
+  } catch (_) {}
+});
+
+es.addEventListener('memory_unarchive', function (e) {
+  try {
+    const data = JSON.parse(e.data);
+    if (state.archived) {
       removeRow(data.id);
     } else {
       if (!state.project || state.project === data.project || !data.project) {

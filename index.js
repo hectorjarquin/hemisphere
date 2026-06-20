@@ -4,7 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-import { initDb, storeMemory, searchHybrid, listMemories, trashMemory, deleteMemory, updateMemory, restoreMemory, listProjects, countProject, trashProject, deleteProject, deleteMemoryPermanent, reassignMemories } from './db.js';
+import { initDb, storeMemory, searchHybrid, listMemories, trashMemory, deleteMemory, updateMemory, restoreMemory, archiveMemory, unarchiveMemory, listProjects, countProject, trashProject, deleteProject, deleteMemoryPermanent, reassignMemories } from './db.js';
 import { getConfig } from './config.js';
 import http from 'node:http';
 
@@ -27,7 +27,7 @@ process.on('SIGTERM', () => { try { db.close(); } catch {} process.exit(0); });
 process.on('SIGINT', () => { try { db.close(); } catch {} process.exit(0); });
 
 const server = new Server(
-  { name: 'hemisphere', version: '1.0.0' },
+  { name: 'hemisphere', version: '1.2.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -58,7 +58,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           project: { type: 'string', description: 'Project namespace to search within. Omit for cross-project search.' },
           query: { type: 'string', description: 'Search query text' },
           limit: { type: 'number', description: 'Max results (default 10)' },
-          alpha: { type: 'number', description: 'Vector weight 0-1, 0=only FTS, 1=only vector (default 0.3)' }
+          alpha: { type: 'number', description: 'Vector weight 0-1, 0=only FTS, 1=only vector (default 0.3)' },
+          archived: { type: 'boolean', description: 'If true, search archived memories instead of active ones' }
         },
         required: ['query']
       }
@@ -71,7 +72,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           project: { type: 'string', description: 'Project namespace to search within. Omit for cross-project search.' },
           query: { type: 'string', description: 'Search query text' },
-          limit: { type: 'number', description: 'Max results (default 10)' }
+          limit: { type: 'number', description: 'Max results (default 10)' },
+          archived: { type: 'boolean', description: 'If true, return context from archived memories instead of active ones' }
         },
         required: ['query']
       }
@@ -85,6 +87,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           project: { type: 'string', description: 'Project namespace' },
           kind: { type: 'string', description: 'Optional kind filter' },
           trash: { type: 'boolean', description: 'If true, list soft-deleted memories instead of active ones' },
+          archived: { type: 'boolean', description: 'If true, list archived memories instead of active ones' },
           limit: { type: 'number', description: 'Max results (default 20, max 200)' }
         },
         required: ['project']
@@ -152,6 +155,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           project: { type: 'string', description: 'Project namespace' },
           id: { type: 'number', description: 'Memory ID to restore' }
+        },
+        required: ['project', 'id']
+      }
+    },
+    {
+      name: 'memory_archive',
+      description: 'Archive a memory by ID (scoped to project). Sets archived_at; archived memories are excluded from default list/search/context. Restorable via memory_unarchive.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project namespace' },
+          id: { type: 'number', description: 'Memory ID to archive' }
+        },
+        required: ['project', 'id']
+      }
+    },
+    {
+      name: 'memory_unarchive',
+      description: 'Restore an archived memory back to active.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Project namespace' },
+          id: { type: 'number', description: 'Memory ID to unarchive' }
         },
         required: ['project', 'id']
       }
@@ -272,7 +299,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memory_list': {
-        const results = listMemories({ ...args, trash: args.trash || false });
+        const results = listMemories({ ...args, trash: args.trash || false, archived: args.archived || false });
         return {
           content: [{ type: 'text', text: JSON.stringify(results, null, 2) }]
         };
@@ -308,6 +335,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (restored) notifyDash('memory_restore', args.id, args.project);
         return {
           content: [{ type: 'text', text: JSON.stringify({ restored }) }]
+        };
+      }
+
+      case 'memory_archive': {
+        const archived = archiveMemory(args.project, args.id);
+        if (archived) notifyDash('memory_archive', args.id, args.project);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ archived }) }]
+        };
+      }
+
+      case 'memory_unarchive': {
+        const unarchived = unarchiveMemory(args.project, args.id);
+        if (unarchived) notifyDash('memory_unarchive', args.id, args.project);
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ unarchived }) }]
         };
       }
 

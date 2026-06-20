@@ -1,4 +1,4 @@
-import { searchHybrid, trashMemory, restoreMemory, purgeExpired, doBackup, listBackups, enforceLiveRetention, deleteMemoryPermanent, trashProject, deleteProject, reassignMemories } from '../db.js';
+import { searchHybrid, trashMemory, restoreMemory, archiveMemory, unarchiveMemory, purgeExpired, doBackup, listBackups, enforceLiveRetention, deleteMemoryPermanent, trashProject, deleteProject, reassignMemories } from '../db.js';
 import { getConfig } from '../config.js';
 
 export function json(data, status = 200) {
@@ -34,6 +34,7 @@ export function createApiHandler(db) {
       const kind = params.get('kind') || '';
       const search = params.get('search') || '';
       const trash = params.get('trash') === '1';
+      const archived = params.get('archived') === '1';
       const maxLimit = getConfig().dashboard.maxLimit;
       const limit = Math.min(parseInt(params.get('limit') || String(getConfig().dashboard.paginationLimit), 10), maxLimit);
       const offset = Math.max(parseInt(params.get('offset') || '0', 10), 0);
@@ -57,7 +58,13 @@ export function createApiHandler(db) {
         conditions.push('kind = ?');
         sqlParams.push(kind);
       }
-      conditions.push(trash ? 'deleted_at IS NOT NULL' : 'deleted_at IS NULL');
+      if (archived) {
+        conditions.push('archived_at IS NOT NULL AND deleted_at IS NULL');
+      } else if (trash) {
+        conditions.push('deleted_at IS NOT NULL');
+      } else {
+        conditions.push('deleted_at IS NULL AND archived_at IS NULL');
+      }
 
       const whereClause = 'WHERE ' + conditions.join(' AND ');
       const countSql = `SELECT COUNT(*) as c FROM memories ${whereClause}`;
@@ -89,6 +96,24 @@ export function createApiHandler(db) {
       if (!id || !project) return err('Missing id or project', 400);
       const restored = restoreMemory(project, id);
       return json({ restored });
+    }
+
+    const archiveMatch = path.match(/^\/api\/memories\/(\d+)\/archive$/);
+    if (archiveMatch && method === 'POST') {
+      const id = parseInt(archiveMatch[1], 10);
+      const project = params.get('project') || '';
+      if (!id || !project) return err('Missing id or project', 400);
+      const archived = archiveMemory(project, id);
+      return json({ archived });
+    }
+
+    const unarchiveMatch = path.match(/^\/api\/memories\/(\d+)\/unarchive$/);
+    if (unarchiveMatch && method === 'POST') {
+      const id = parseInt(unarchiveMatch[1], 10);
+      const project = params.get('project') || '';
+      if (!id || !project) return err('Missing id or project', 400);
+      const unarchived = unarchiveMemory(project, id);
+      return json({ unarchived });
     }
 
     if (path === '/api/purge' && method === 'POST') {
