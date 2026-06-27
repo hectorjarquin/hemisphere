@@ -136,8 +136,8 @@ Store a memory observation with hybrid FTS+vector indexing.
 |-----------|------|----------|---------|-------------|
 | `project` | string | yes | — | Project namespace |
 | `content` | string | yes | — | Memory text |
-| `kind` | string | no | `note` | Category label (`fact`, `decision`, `bug`, `note`, `plan`) |
-| `status` | string | no | — | Lifecycle status (e.g. `pending`, `completed`, `approved`) |
+| `kind` | string | no | `note` | Category label. Default: `fact`, `decision`, `bug`, `note`, `plan`. Custom schemas extend via config. |
+| `status` | string | no | — | Lifecycle status. Validated against kind+project schema. Invalid values rejected. |
 | `related_ids` | number[] | no | — | IDs of related memories for relationship tracking |
 | `metadata` | object | no | `{}` | Kind-based schema — see [Metadata](#metadata) below |
 
@@ -351,7 +351,9 @@ Metadata is auto-populated with `created_at` and `updated_at` Unix timestamps on
 - `bug`: `open` → `in_progress` → `fixed` → `wont_fix` → `cant_repro`
 - `plan`: `pending` → `in_progress` → `completed` → `cancelled`
 
-Invalid status values reset to the kind default. Extraneous keys are preserved.
+Invalid status values are **rejected** with an error listing valid options, giving LLM agents immediate corrective feedback. Extraneous keys are preserved.
+
+Custom schemas can define project-specific kinds and statuses — see [Custom Schemas](#custom-schemas) below.
 
 ## Configuration
 
@@ -396,9 +398,15 @@ Create an optional JSON config file to customize operational settings. All keys 
   "dashboard": {
     "paginationLimit": 50,
     "maxLimit": 200
+  },
+  "schemas": {
+    "default": {
+      "kinds": {}
+    }
   }
 }
 ```
+> See [Custom Schemas](#custom-schemas) for per-project kind and status vocabularies.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -432,6 +440,36 @@ Environment variables **override** the config file and code defaults at the high
 | `RETENTION_POLICY` | `retention.days` | `{"note":30,...}` |
 
 `RETENTION_POLICY` accepts a JSON object like `{"note": 15, "bug": 365}`. Values can be `"forever"`, `0`, or `"0"` for indefinite retention. Missing kinds inherit from defaults.
+
+### Custom Schemas
+
+Define project-specific kind and status vocabularies in `~/.hemisphere/config.json`. The built-in default schema (`fact`, `decision`, `bug`, `plan`, `note`) is always available. Per-project schemas override and extend it.
+
+```json
+{
+  "schemas": {
+    "project-management": {
+      "kinds": {
+        "meeting":   { "statuses": ["scheduled","in_progress","completed","cancelled"] },
+        "email":     { "statuses": ["draft","sent","replied","forwarded"] },
+        "milestone": { "statuses": ["planned","active","blocked","delivered"] }
+      }
+    }
+  }
+}
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `schemas.default.kinds` | object | built-in set | Kind definitions with `statuses`, `defaults`, and `required` fields |
+| `schemas.[project].kinds` | object | — | Per-project kind overrides. Falls back to `schemas.default` if not set. |
+
+Each kind entry supports:
+- `statuses`: `string[]` — valid status values. Empty array = no status validation.
+- `defaults`: `object` — fields auto-populated on store/update
+- `required`: `string[]` — fields that receive defaults if missing
+
+Unknown kinds (not declared in any schema) pass through without validation — existing data is never affected.
 
 ## Architecture
 

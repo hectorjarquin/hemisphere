@@ -36,6 +36,23 @@ const DEFAULTS = {
   dashboard: {
     paginationLimit: 50,
     maxLimit: 200
+  },
+  schemas: {
+    default: {
+      kinds: {
+        fact:     { statuses: [], defaults: {} },
+        decision: { statuses: ["proposed","approved","rejected","implemented","superseded"],
+                    required: ["status"],
+                    defaults: { status: "proposed", files: [], rationale: "" } },
+        bug:      { statuses: ["open","in_progress","fixed","wont_fix","cant_repro"],
+                    required: ["status"],
+                    defaults: { status: "open", severity: "minor", files: [] } },
+        plan:     { statuses: ["pending","in_progress","completed","cancelled"],
+                    required: ["status"],
+                    defaults: { status: "pending", files: [], steps: [] } },
+        note:     { statuses: [], defaults: { tags: [], cwd: "" } }
+      }
+    }
   }
 };
 
@@ -43,7 +60,10 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 function deepMerge(target, source) {
   for (const key of Object.keys(source)) {
-    if (!Object.hasOwn(target, key)) continue;
+    if (!Object.hasOwn(target, key)) {
+      target[key] = JSON.parse(JSON.stringify(source[key]));
+      continue;
+    }
     const tv = target[key];
     const sv = source[key];
     if (isObject(tv) && isObject(sv)) {

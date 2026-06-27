@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-26
+
+### Added
+- Configurable kind/status schemas via `schemas` key in DEFAULTS and `~/.hemisphere/config.json`
+- Per-project schema overrides: `schemas.[project].kinds` allows domain-specific vocabularies (PM, editorial, design, etc.)
+- Schema validation on `memory_store` and `memory_update`: invalid status values for a known kind are rejected with an error listing valid options, giving LLM agents immediate corrective feedback
+
+### Changed
+- Kind/status schemas moved from hardcoded `db.js` constants to `config.js` DEFAULTS for user configurability
+- `memory_store` and `memory_update`: `status` argument is now merged into `metadata` before validation — the DB `status` column and `metadata.status` field are a single source of truth
+- `normalizeMetadata` signature changed: requires `project` parameter for schema resolution
+- Tool descriptions for `memory_store` and `memory_update` updated to reference project-level schemas
+
+### Fixed
+- `deepMerge` now correctly clones new top-level keys from user config instead of silently dropping them
+- Status column / metadata.status divergence eliminated: both `storeMemory` and `updateMemory` route through unified validation
+
+### Removed
+- `KIND_SCHEMAS` and `STATUS_VALUES` constants from `db.js` (ported to `config.js` DEFAULTS)
+- Silent status coercion on invalid values (replaced with explicit validation rejection)
+
 ## [1.2.1] - 2026-06-20
 
 ### Added

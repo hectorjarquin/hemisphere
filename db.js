@@ -149,41 +149,38 @@ export function enforceLiveRetention() {
   return purged;
 }
 
-const KIND_SCHEMAS = {
-  fact:     { defaults: {} },
-  decision: { required: ['status'], defaults: { status: 'proposed', files: [], rationale: '' } },
-  bug:      { required: ['status'], defaults: { status: 'open', severity: 'minor', files: [] } },
-  plan:     { required: ['status'], defaults: { status: 'pending', files: [], steps: [] } },
-  note:     { defaults: { tags: [], cwd: '' } },
-};
+function resolveSchema(project) {
+  const schemas = getConfig().schemas || {};
+  return schemas[project] || schemas.default;
+}
 
-const STATUS_VALUES = {
-  decision: ['proposed', 'approved', 'rejected', 'implemented', 'superseded'],
-  bug:      ['open', 'in_progress', 'fixed', 'wont_fix', 'cant_repro'],
-  plan:     ['pending', 'in_progress', 'completed', 'cancelled'],
-};
+function normalizeMetadata(project, kind, rawMeta, now) {
+  const schema = resolveSchema(project);
+  const kindSchema = schema?.kinds?.[kind];
 
-function normalizeMetadata(kind, rawMeta, now) {
-  const schema = KIND_SCHEMAS[kind] || KIND_SCHEMAS.note;
-  const meta = { ...schema.defaults };
-
-  if (rawMeta && typeof rawMeta === 'object') {
-    for (const key of Object.keys(rawMeta)) {
-      if (rawMeta[key] !== undefined && rawMeta[key] !== null) {
-        meta[key] = rawMeta[key];
+  let meta;
+  if (kindSchema) {
+    meta = { ...kindSchema.defaults };
+    if (rawMeta && typeof rawMeta === 'object') {
+      for (const key of Object.keys(rawMeta)) {
+        if (rawMeta[key] !== undefined && rawMeta[key] !== null) {
+          meta[key] = rawMeta[key];
+        }
       }
     }
-  }
-
-  for (const key of (schema.required || [])) {
-    if (meta[key] === undefined || meta[key] === null) {
-      meta[key] = schema.defaults[key];
+    for (const key of (kindSchema.required || [])) {
+      if (meta[key] === undefined || meta[key] === null) {
+        meta[key] = kindSchema.defaults[key];
+      }
     }
-  }
-
-  const validStatuses = STATUS_VALUES[kind];
-  if (validStatuses && !validStatuses.includes(meta.status)) {
-    meta.status = schema.defaults.status;
+    const validStatuses = kindSchema.statuses || [];
+    if (validStatuses.length > 0 && meta.status && !validStatuses.includes(meta.status)) {
+      throw new Error(
+        `Invalid status "${meta.status}" for kind "${kind}". Valid: ${validStatuses.join(", ")}`
+      );
+    }
+  } else {
+    meta = rawMeta && typeof rawMeta === 'object' ? { ...rawMeta } : {};
   }
 
   const ts = now || Math.floor(Date.now() / 1000);
@@ -199,13 +196,19 @@ export function storeMemory({ project, kind, content, metadata, related_ids, sta
     throw new Error('Content exceeds maximum size (100,000 characters)');
   }
   const finalKind = kind || 'note';
-  const meta = normalizeMetadata(finalKind, metadata);
+
+  const metaInput = { ...(metadata || {}) };
+  if (status !== undefined && status !== null) {
+    metaInput.status = status;
+  }
+
+  const meta = normalizeMetadata(project, finalKind, metaInput);
   const metaStr = JSON.stringify(meta);
   const rids = Array.isArray(related_ids) ? related_ids.join(',') : String(related_ids || '');
   const now = Math.floor(Date.now() / 1000);
   const result = d.prepare(
     'INSERT INTO memories (project, kind, related_ids, status, content, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(project, finalKind, rids, status || '', content, metaStr, now, now);
+  ).run(project, finalKind, rids, meta.status || '', content, metaStr, now, now);
 
   const id = Number(result.lastInsertRowid);
 
@@ -395,19 +398,20 @@ export function updateMemory({ id, project, kind, content, metadata, related_ids
     sets.push('related_ids = ?');
     params.push(rids);
   }
-  if (status !== undefined && status !== null) {
-    sets.push('status = ?');
-    params.push(status);
-  }
 
   sets.push('updated_at = unixepoch()');
 
   const existingMeta = JSON.parse(existing.metadata || '{}');
-  const incomingMeta = metadata !== undefined && metadata !== null ? metadata : {};
+  const incomingMeta = metadata !== undefined && metadata !== null ? { ...metadata } : {};
   if (typeof incomingMeta === 'string') {
     try { metadata = JSON.parse(incomingMeta); } catch { metadata = {}; }
   }
-  const mergedMeta = normalizeMetadata(effectiveKind, { ...existingMeta, ...metadata });
+  if (status !== undefined && status !== null) {
+    incomingMeta.status = status;
+  }
+  const mergedMeta = normalizeMetadata(project, effectiveKind, { ...existingMeta, ...incomingMeta });
+  sets.push('status = ?');
+  params.push(mergedMeta.status || '');
   sets.push('metadata = ?');
   params.push(JSON.stringify(mergedMeta));
 

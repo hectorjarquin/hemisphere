@@ -41,10 +41,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           project: { type: 'string', description: 'Project namespace for the memory' },
           content: { type: 'string', description: 'Memory content text' },
-          kind: { type: 'string', description: 'Optional category label (e.g. fact, decision, bug)' },
+          kind: { type: 'string', description: 'Optional category label. Default schema: fact, decision, bug, plan, note. Custom schemas supported per project via ~/.hemisphere/config.json.' },
           related_ids: { type: 'array', items: { type: 'number' }, description: 'Optional. IDs of related memories' },
-          status: { type: 'string', description: 'Optional lifecycle status (e.g. pending, approved, completed, draft)' },
-          metadata: { type: 'object', description: 'Optional JSON metadata. Auto-populated: created_at, updated_at. Kind schemas — fact: {}, decision: {status: proposed|approved|rejected|implemented|superseded, files?:[], rationale?:""}, bug: {status: open|in_progress|fixed|wont_fix|cant_repro, severity?:"minor"|"major"|"critical", files?:[]}, plan: {status: pending|in_progress|completed|cancelled, files?:[], steps?:[]}, note: {tags?:[], cwd?:""}', additionalProperties: true }
+          status: { type: 'string', description: 'Optional lifecycle status. Validated against kind+project schema. Invalid values rejected with a list of valid options.' },
+          metadata: { type: 'object', description: 'Optional JSON metadata. Auto-populated: created_at, updated_at. Schema-driven defaults and validation per kind+project.', additionalProperties: true }
         },
         required: ['project', 'content']
       }
@@ -125,11 +125,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           id: { type: 'number', description: 'Memory ID to update' },
           project: { type: 'string', description: 'Project namespace for scoping' },
-          kind: { type: 'string', description: 'Optional new category label' },
+          kind: { type: 'string', description: 'Optional new category label. Default schema: fact, decision, bug, plan, note. Custom schemas supported per project.' },
           related_ids: { type: 'array', items: { type: 'number' }, description: 'Optional. IDs of related memories' },
-          status: { type: 'string', description: 'Optional new lifecycle status' },
+          status: { type: 'string', description: 'Optional new lifecycle status. Validated against kind+project schema. Invalid values rejected with a list of valid options.' },
           content: { type: 'string', description: 'Optional new content text' },
-          metadata: { type: 'object', description: 'Optional fields to update. Merged with existing metadata, re-normalized to kind schema. updated_at auto-bumped.', additionalProperties: true }
+          metadata: { type: 'object', description: 'Optional fields to update. Merged with existing metadata, validated and re-normalized to kind+project schema. updated_at auto-bumped.', additionalProperties: true }
         },
         required: ['id', 'project']
       }
