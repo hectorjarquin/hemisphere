@@ -1,12 +1,10 @@
-<img src="logo.svg" height="48" alt="" />
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
 # Hemisphere
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+A self-contained AI memory engine that uses hybrid vector search and MCP to give models long-term recall without cloud dependencies.
 
-**Author:** [Hector Jarquin](https://hectorjarquin.com)
-
-A persistent, searchable memory store for AI agents. Gives LLMs long-term recall across sessions using hybrid FTS + vector search, structured metadata, full CRUD, progressive summaries, and a live dashboard — no model downloads, no API keys, no Python.
+Built entirely in Node.js, Hemisphere gives LLMs persistent, session-spanning recall using a localized hybrid FTS + vector search architecture, structured metadata validation, progressive summary synthesis, and a live dashboard — with zero model downloads, zero external API keys, and no Python runtime required.
 
 ## Quick Start
 
