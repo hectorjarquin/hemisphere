@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-06-29
+
+### Added
+- `memory_brief` tool — session-start resumption in one call. Returns a
+  lightweight metadata-only overview of all projects: last progressive summary
+  (with staleness flag comparing summary updated_at against non-summary memory
+  timestamps), pending counts, open bug counts, and activity counts. No content
+  bodies or snippets loaded — load specifics only when a project is selected
+  for work. Optional `project` parameter for single-project briefs.
+
 ## [1.3.2] - 2026-06-28
 
 ### Changed

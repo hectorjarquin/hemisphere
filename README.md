@@ -308,6 +308,29 @@ Returns either:
 - **Fresh data** — `{ needs_store: true, memories: [{id, kind, status, title}], synthesis_template: "...", trigger: "turn_interval"|"context_pressure" }` → agent synthesizes a summary from the structured data and stores it
 - **Current summary** — `{ up_to_date: true, content: "...", summary_id: N }` → use the existing summary
 
+### `memory_brief`
+
+Get a structured session-start brief across all projects. Returns last
+progressive summary (with staleness flag), pending counts, open bug counts,
+and activity counts. No content loaded — one call to resume from the last
+known state.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project` | string | no | — | Optional. Single project. Omit for all projects. |
+| `decisions_per_project` | number | no | `3` | (Reserved, future use) |
+
+Returns an array of projects, each with:
+```json
+{
+  "project": "compend",
+  "last_summary": { "id": 347, "stale": false },
+  "pending": 0,
+  "open_bugs": 1,
+  "activity_count": 21
+}
+```
+
 ## HTTP API (Dashboard-Facing)
 
 The dashboard exposes REST endpoints:

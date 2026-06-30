@@ -4,7 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-import { initDb, storeMemory, searchHybrid, listMemories, trashMemory, deleteMemory, updateMemory, restoreMemory, archiveMemory, unarchiveMemory, listProjects, countProject, trashProject, deleteProject, deleteMemoryPermanent, reassignMemories } from './db.js';
+import { initDb, storeMemory, searchHybrid, listMemories, trashMemory, deleteMemory, updateMemory, restoreMemory, archiveMemory, unarchiveMemory, listProjects, countProject, trashProject, deleteProject, deleteMemoryPermanent, reassignMemories, getBrief } from './db.js';
 import { getConfig } from './config.js';
 import http from 'node:http';
 
@@ -27,7 +27,7 @@ process.on('SIGTERM', () => { try { db.close(); } catch {} process.exit(0); });
 process.on('SIGINT', () => { try { db.close(); } catch {} process.exit(0); });
 
 const server = new Server(
-  { name: 'hemisphere', version: '1.2.0' },
+  { name: 'hemisphere', version: '1.4.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -251,6 +251,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ['project']
       }
+    },
+    {
+      name: 'memory_brief',
+      description: 'Get a structured session-start brief across all projects. Returns last progressive summary (with staleness flag), pending counts, open bug counts, and activity counts. One call to resume from the last known state.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'Optional. Single project. Omit for all projects with activity.' },
+          decisions_per_project: { type: 'number', description: 'How many recent decisions/plans per project (default 3)' }
+        },
+        required: []
+      }
     }
   ]
 }));
@@ -473,6 +485,13 @@ ${memoryItems.filter(m => m.status === 'pending' || m.status === 'in_progress').
               trigger: ctxPct <= thresholdCtx ? 'context_pressure' : 'turn_interval'
             })
           }]
+        };
+      }
+
+      case 'memory_brief': {
+        const results = getBrief(args);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(results, null, 2) }]
         };
       }
 

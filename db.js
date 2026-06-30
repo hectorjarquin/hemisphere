@@ -449,6 +449,53 @@ export function listProjects() {
   return d.prepare('SELECT DISTINCT project FROM memories ORDER BY project').all().map(r => r.project);
 }
 
+export function getBrief({ project, decisionsPerProject = 3 } = {}) {
+  const d = initDb();
+
+  const projects = project
+    ? [project]
+    : d.prepare('SELECT DISTINCT project FROM memories ORDER BY project').all().map(r => r.project);
+
+  const results = [];
+
+  for (const proj of projects) {
+    let lastSummary = null;
+
+    const summaryRow = d.prepare(
+      "SELECT id, updated_at FROM memories WHERE project = ? AND kind = 'progressive_summary' AND deleted_at IS NULL AND archived_at IS NULL ORDER BY created_at DESC LIMIT 1"
+    ).get(proj);
+    if (summaryRow) {
+      lastSummary = { id: summaryRow.id, stale: false };
+      const newer = d.prepare(
+        "SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL AND kind != 'progressive_summary' AND updated_at > ? LIMIT 1"
+      ).get(proj, summaryRow.updated_at);
+      lastSummary.stale = newer.c > 0;
+    }
+
+    const pendingCount = d.prepare(
+      "SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL AND kind = 'plan' AND status IN ('pending','approved','in_progress')"
+    ).get(proj).c;
+
+    const openBugsCount = d.prepare(
+      "SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL AND kind = 'bug' AND status IN ('open','in_progress')"
+    ).get(proj).c;
+
+    const activityCount = d.prepare(
+      'SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL'
+    ).get(proj).c;
+
+    results.push({
+      project: proj,
+      last_summary: lastSummary,
+      pending: pendingCount,
+      open_bugs: openBugsCount,
+      activity_count: activityCount
+    });
+  }
+
+  return results;
+}
+
 export function countProject(project) {
   const d = initDb();
   const rows = d.prepare(
