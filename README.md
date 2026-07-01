@@ -109,17 +109,18 @@ Memories are scoped by **project** — searching under `my-plugin` won't return 
 Add these instructions to your `CLAUDE.md`, `AGENTS.md`, or `.opencode/`
 instruction file.
 
+```
 Scope all memories to a project. Use the repo name as the project name.
 
-At session start, call `memory_brief` to get a lightweight overview of
+At session start, call memory_brief to get a lightweight overview of
 all projects — summary staleness, pending counts, open bug counts, and
 activity levels. No content is loaded. Load specifics only when a
 project is selected for work.
 
-Store facts, decisions, and bugs with `memory_store` at the moment they
+Store facts, decisions, and bugs with memory_store at the moment they
 happen. Capture rationale, tradeoffs, and root causes.
 
-Run `memory_search` before touching unfamiliar or stalled code.
+Run memory_search before touching unfamiliar or stalled code.
 
 Keep statuses updated. Trash only items with no remaining value. Archive
 completed work — don't delete decisions or rationale.
@@ -129,6 +130,7 @@ Before implementing a feature, search for related past decisions.
 
 When you discover a reusable pattern, store it. Don't duplicate what
 existing skills or documentation already cover.
+```
 
 ## Updating
 
