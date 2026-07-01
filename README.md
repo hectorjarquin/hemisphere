@@ -1,4 +1,6 @@
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+<img src="logo.svg" height="48" alt="" />
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
 # Hemisphere
 
@@ -101,6 +103,32 @@ npm link  # creates global `hemisphere` command
 Find your exact path with `npm root -g` — append `/hemisphere/index.js`. For nvm users the path is typically `~/.nvm/versions/node/vX/lib/node_modules/hemisphere/index.js`.
 
 Memories are scoped by **project** — searching under `my-plugin` won't return memories from `my-theme`.
+
+## Memory Best Practices
+
+Add these instructions to your `CLAUDE.md`, `AGENTS.md`, or `.opencode/`
+instruction file.
+
+Scope all memories to a project. Use the repo name as the project name.
+
+At session start, call `memory_brief` to get a lightweight overview of
+all projects — summary staleness, pending counts, open bug counts, and
+activity levels. No content is loaded. Load specifics only when a
+project is selected for work.
+
+Store facts, decisions, and bugs with `memory_store` at the moment they
+happen. Capture rationale, tradeoffs, and root causes.
+
+Run `memory_search` before touching unfamiliar or stalled code.
+
+Keep statuses updated. Trash only items with no remaining value. Archive
+completed work — don't delete decisions or rationale.
+
+After fixing a bug, store the root cause, fix, and affected files.
+Before implementing a feature, search for related past decisions.
+
+When you discover a reusable pattern, store it. Don't duplicate what
+existing skills or documentation already cover.
 
 ## Updating
 
@@ -611,5 +639,4 @@ npx @modelcontextprotocol/inspector node index.js
 Open an issue or PR at [github.com/hectorjarquin/hemisphere](https://github.com/hectorjarquin/hemisphere).
 
 ## License
-
-GNU General Public License v3.0 or later — see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.

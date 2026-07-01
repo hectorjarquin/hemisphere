@@ -1,9 +1,9 @@
 {
   "name": "hemisphere",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "Lightweight memory MCP server with hybrid FTS + vector search",
   "type": "module",
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hectorjarquin/hemisphere.git"
