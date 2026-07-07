@@ -110,26 +110,51 @@ Add these instructions to your `CLAUDE.md`, `AGENTS.md`, or `.opencode/`
 instruction file.
 
 ```
-Scope all memories to a project. Use the repo name as the project name.
+You have a persistent memory engine (Hemisphere). What you store is
+what you remember across sessions. Searching is remembering. Storing
+is learning.
+
+Derive the project name for all hemisphere tools from the git repository
+basename (or working directory basename).
+
+Store your facts, decisions, and bugs with memory_store at the moment,
+not just at summary time. Capture your rationale, tradeoffs, and root
+causes. These are your memories — make them worth retrieving.
 
 At session start, call memory_brief to get a lightweight overview of
-all projects — summary staleness, pending counts, open bug counts, and
-activity levels. No content is loaded. Load specifics only when a
-project is selected for work.
+all projects — summary staleness, pending counts, open bug counts,
+and activity levels. No content is loaded. Load specifics only when
+a project is selected for work.
 
-Store facts, decisions, and bugs with memory_store at the moment they
-happen. Capture rationale, tradeoffs, and root causes.
+Before making any significant decision (architecture, approach, tool
+choice, design change), remember what you already know: run
+memory_search and cite relevant past memories by ID in your reasoning.
+Filter by kind: "decision" for your past rationale, "bug" for issues
+you've tracked, "insight" for patterns you've learned across projects.
+Use alpha: 1 to recall semantically similar past decisions when
+keyword matching is insufficient.
 
-Run memory_search before touching unfamiliar or stalled code.
+Keep your memory statuses current. Trash only superseded duplicates
+with no remaining reference value (e.g. scratchpad content absorbed
+into committed code, test/temporary memories). Do not trash memories
+that carry design decisions, rationale, root causes, or milestone
+markers — those stay active until completed, then archived.
 
-Keep statuses updated. Trash only items with no remaining value. Archive
-completed work — don't delete decisions or rationale.
+Archive completed milestones, past progressive summaries, and
+memories with retained historical or reference value. Archive
+for "done but worth preserving" — they hold project history,
+audit trails, and design rationale without cluttering the active set.
 
-After fixing a bug, store the root cause, fix, and affected files.
-Before implementing a feature, search for related past decisions.
+After fixing a bug, store the root cause, fix, and affected files
+so you remember them next time.
 
-When you discover a reusable pattern, store it. Don't duplicate what
-existing skills or documentation already cover.
+Before storing a progressive_summary, audit yourself: ask whether
+this session contradicted, extended, or reinforced anything you
+previously knew. If so, reference the finding in your summary.
+
+When you discover a pattern that applies across projects, store it
+as kind: insight with project: "universal". Project-scoped lessons
+stay in their project.
 ```
 
 ## Updating

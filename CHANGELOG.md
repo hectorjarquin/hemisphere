@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-07-06
+
+### Changed
+- Updated Memory Best Practices in README — now matches the current
+  instruction file with ownership framing, kind filter guidance,
+  mandatory pre-decision search, session-end audit, and insight
+  storage conventions.
+
 ## [2.0.2] - 2026-07-06
 
 ### Added
