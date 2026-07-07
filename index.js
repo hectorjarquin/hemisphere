@@ -27,7 +27,7 @@ process.on('SIGTERM', () => { try { db.close(); } catch {} process.exit(0); });
 process.on('SIGINT', () => { try { db.close(); } catch {} process.exit(0); });
 
 const server = new Server(
-  { name: 'hemisphere', version: '2.0.0' },
+  { name: 'hemisphere', version: '2.0.2' },
   { capabilities: { tools: {} } }
 );
 
@@ -59,7 +59,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           query: { type: 'string', description: 'Search query text' },
           limit: { type: 'number', description: 'Max results (default 10)' },
           alpha: { type: 'number', description: 'Vector weight 0-1, 0=only FTS, 1=only vector (default 0.3)' },
-          archived: { type: 'boolean', description: 'If true, search archived memories instead of active ones' }
+          archived: { type: 'boolean', description: 'If true, search archived memories instead of active ones' },
+          kind: { type: 'string', description: 'Optional. Filter by memory kind (fact, decision, bug, plan, note)' }
         },
         required: ['query']
       }
@@ -73,7 +74,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           project: { type: 'string', description: 'Project namespace to search within. Omit for cross-project search.' },
           query: { type: 'string', description: 'Search query text' },
           limit: { type: 'number', description: 'Max results (default 10)' },
-          archived: { type: 'boolean', description: 'If true, return context from archived memories instead of active ones' }
+          archived: { type: 'boolean', description: 'If true, return context from archived memories instead of active ones' },
+          kind: { type: 'string', description: 'Optional. Filter by memory kind (fact, decision, bug, plan, note)' }
         },
         required: ['query']
       }
@@ -101,18 +103,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           project: { type: 'string', description: 'Project namespace' },
           id: { type: 'number', description: 'Memory ID to soft-delete' }
-        },
-        required: ['project', 'id']
-      }
-    },
-    {
-      name: 'memory_delete',
-      description: 'DEPRECATED: Use memory_trash instead. Soft-deletes a memory by ID. Will be removed in v3.0.0.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          project: { type: 'string', description: 'Project namespace' },
-          id: { type: 'number', description: 'Memory ID to delete' }
         },
         required: ['project', 'id']
       }
@@ -320,8 +310,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case 'memory_trash':
-      case 'memory_delete': {
+      case 'memory_trash': {
         const deleted = deleteMemory(args.project, args.id);
         if (deleted) notifyDash('memory_trash', args.id, args.project);
         return {

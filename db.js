@@ -236,7 +236,7 @@ function sanitizeFtsQuery(query) {
     .join(' ');
 }
 
-export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived }) {
+export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived, kind }) {
   const d = initDb();
   if (alpha < 0) alpha = 0;
   if (alpha > 1) alpha = 1;
@@ -265,6 +265,8 @@ export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived
   const ftsParams = [ftsQuery];
   const ftsProjectClause = project ? 'AND m.project = ?' : '';
   if (project) ftsParams.push(project);
+  const ftsKindClause = kind && kind.trim().length > 0 ? 'AND m.kind = ?' : '';
+  if (kind && kind.trim().length > 0) ftsParams.push(kind);
   ftsParams.push(K);
 
   const ftsResults = d.prepare(`
@@ -272,7 +274,7 @@ export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived
            f.rank as raw_rank
     FROM (SELECT rowid, rank FROM memories_fts WHERE memories_fts MATCH ?) f
     JOIN memories m ON m.id = f.rowid
-    WHERE 1=1 ${deletedClause} ${ftsProjectClause}
+    WHERE 1=1 ${deletedClause} ${ftsProjectClause} ${ftsKindClause}
     ORDER BY raw_rank
     LIMIT ?
   `).all(...ftsParams);
@@ -308,10 +310,13 @@ export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived
       if (ftsMap.has(id)) {
         ftsMap.get(id).vec_score = norm;
       } else {
+        const lookupKindClause = kind && kind.trim().length > 0 ? ' AND kind = ?' : '';
         const lookupSql = project
-          ? `SELECT * FROM memories WHERE id = ? AND project = ? AND ${lookupClause}`
-          : `SELECT * FROM memories WHERE id = ? AND ${lookupClause}`;
-        const lookupParams = project ? [id, project] : [id];
+          ? `SELECT * FROM memories WHERE id = ? AND project = ?${lookupKindClause} AND ${lookupClause}`
+          : `SELECT * FROM memories WHERE id = ?${lookupKindClause} AND ${lookupClause}`;
+        const lookupParams = [id];
+        if (project) lookupParams.push(project);
+        if (kind && kind.trim().length > 0) lookupParams.push(kind);
         const m = d.prepare(lookupSql).get(...lookupParams);
         if (m) {
           m.fts_score = 0;

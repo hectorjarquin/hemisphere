@@ -180,6 +180,7 @@ Hybrid FTS + vector search with weighted scoring.
 | `limit` | number | no | `10` | Max results |
 | `alpha` | number | no | `0.3` | Vector weight. `0` = FTS-only, `1` = vector-only |
 | `archived` | boolean | no | `false` | If true, search archived memories instead of active ones |
+| `kind` | string | no | — | Filter by memory kind (fact, decision, bug, plan, note) |
 
 Returns memories sorted by relevance (score 0–1).
 
@@ -193,6 +194,7 @@ Same as `memory_search` but returns plain text formatted for prompt injection.
 | `query` | string | yes | — | Search text |
 | `limit` | number | no | `10` | Max results |
 | `archived` | boolean | no | `false` | If true, search archived memories instead of active ones |
+| `kind` | string | no | — | Filter by memory kind (fact, decision, bug, plan, note) |
 
 Output:
 ```
@@ -220,15 +222,6 @@ Soft-delete a memory by ID (scoped to project). Sets `deleted_at`; recoverable v
 |-----------|------|----------|---------|-------------|
 | `project` | string | yes | — | Project namespace |
 | `id` | number | yes | — | Memory ID to soft-delete |
-
-### `memory_delete` (deprecated)
-
-**DEPRECATED:** Use `memory_trash` instead. Will be removed in v3.0.0.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `project` | string | yes | — | Project namespace |
-| `id` | number | yes | — | Memory ID to delete |
 
 ### `memory_update`
 
