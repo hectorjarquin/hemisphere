@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mandatory pre-decision search, session-end audit, and insight
   storage conventions.
 
+## [2.0.4] - 2026-07-11
+
+### Added
+- `notifySubscribers` config key — array of service names (e.g., `["cordenar"]`).
+  On every tool call, `notifyDash()` also POSTs event payloads to each
+  subscriber's endpoint. Subscribers register via `~/.{name}/manifest.json`
+  with `notifyEndpoint`. Env override: `HEMISPHERE_NOTIFY_SUBSCRIBERS`
+  (comma-separated). Opt-in — empty array preserves existing behavior.
+- Manifest resolution: when a subscriber name is configured, Hemisphere reads
+  `~/.{name}/manifest.json` at notify-time for the target endpoint URL.
+
 ## [2.0.2] - 2026-07-06
 
 ### Added

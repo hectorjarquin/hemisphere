@@ -53,7 +53,8 @@ const DEFAULTS = {
         note:     { statuses: [], defaults: { tags: [], cwd: "" } }
       }
     }
-  }
+  },
+  notifySubscribers: []
 };
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -126,6 +127,9 @@ function applyEnvOverrides(cfg) {
     } catch (e) {
       console.warn('Hemisphere: RETENTION_POLICY parse error \u2014 using defaults:', e.message);
     }
+  }
+  if (process.env.HEMISPHERE_NOTIFY_SUBSCRIBERS && process.env.HEMISPHERE_NOTIFY_SUBSCRIBERS.trim()) {
+    cfg.notifySubscribers = process.env.HEMISPHERE_NOTIFY_SUBSCRIBERS.trim().split(',').map(s => s.trim()).filter(Boolean);
   }
 }
 

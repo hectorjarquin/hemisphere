@@ -472,7 +472,8 @@ Create an optional JSON config file to customize operational settings. All keys 
     "default": {
       "kinds": {}
     }
-  }
+  },
+  "notifySubscribers": ["cordenar"]
 }
 ```
 > See [Custom Schemas](#custom-schemas) for per-project kind and status vocabularies.
@@ -494,6 +495,7 @@ Create an optional JSON config file to customize operational settings. All keys 
 | `summary.recentLimit` | number | `50` | Max memories retrieved for summary context |
 | `dashboard.paginationLimit` | number | `50` | Default page size for dashboard API |
 | `dashboard.maxLimit` | number | `200` | Hard cap on API page size |
+| `notifySubscribers` | array | `[]` | Service names to notify on tool calls (reads `~/.{name}/manifest.json` for endpoint URL) |
 
 ### Environment Variables
 
@@ -507,6 +509,7 @@ Environment variables **override** the config file and code defaults at the high
 | `BACKUP_INTERVAL_WRITES` | `backup.intervalWrites` | `50` |
 | `BACKUP_RETENTION_COUNT` | `backup.retentionCount` | `10` |
 | `RETENTION_POLICY` | `retention.days` | `{"note":30,...}` |
+| `HEMISPHERE_NOTIFY_SUBSCRIBERS` | `notifySubscribers` | — (comma-separated) |
 
 `RETENTION_POLICY` accepts a JSON object like `{"note": 15, "bug": 365}`. Values can be `"forever"`, `0`, or `"0"` for indefinite retention. Missing kinds inherit from defaults.
 
@@ -603,6 +606,19 @@ MCP server (index.js) → `notifyDash()` → dashboard `/api/notify` → `broadc
 | `project_purge` | `project_purge` | Clear current project + refresh dropdown |
 
 If the SSE connection drops, a 30-second fallback poll resumes.
+
+### Cross-Tool Notifications
+
+Hemisphere can notify other tools when memories change via `notifySubscribers`.
+When configured, every `memory_store`, `memory_trash`, `memory_update`, and
+other tool call will POST an event to each subscriber's endpoint. Subscribers
+discover each other by convention — each tool writes a `manifest.json` on
+startup with `{ "name": "...", "notifyEndpoint": "..." }`. When a subscriber
+is not running, the POST silently fails (logged only as a missed event).
+
+See [Cordenar MCP](https://github.com/hectorjarquin/cordenar-mcp) for an
+example subscriber implementing a real-time synapse dashboard via this
+mechanism.
 
 ## Project Structure
 
