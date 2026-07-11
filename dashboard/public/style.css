@@ -205,14 +205,10 @@ header div {
 
 #loading-skeleton th {
   text-align: left;
-  padding: 8px 12px;
-  font-size: 12px;
-  text-transform: uppercase;
-  color: var(--foreground);
-  letter-spacing: .5px;
-  border-bottom: 1px solid var(--border);
-  font-weight: 500;
-  background: var(--accent);
+  padding: 8px 6px;
+  font-weight: 600;
+  opacity: 0.7;
+  white-space: nowrap;
 }
 
 .skeleton-row td {
@@ -238,8 +234,6 @@ header div {
 }
 
 #table-wrap {
-  border: 1px solid var(--border);
-  border-radius: 6px;
   overflow-x: auto;
   position: relative;
 }
@@ -250,40 +244,31 @@ table {
 }
 
 thead {
-  background: var(--accent);
+  border-bottom: 2px solid var(--foreground);
 }
 
 th {
   text-align: left;
-  padding: 8px 12px;
-  font-size: 12px;
-  text-transform: uppercase;
-  color: var(--foreground);
-  letter-spacing: .5px;
-  border-bottom: 1px solid var(--border);
-  font-weight: 500;
+  padding: 8px 6px;
+  font-weight: 600;
+  opacity: 0.7;
+  white-space: nowrap;
 }
 
 td {
-  padding: 10px 12px;
+  padding: 8px 6px;
   border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-
-tbody tr:last-child td {
-  border-bottom: none;
 }
 
 tbody tr {
   cursor: pointer;
-  transition: background .15s;
 }
 
 tbody tr:hover {
   background: var(--accent);
 }
 
-tbody tr:focus-within {
+tbody tr:focus {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
