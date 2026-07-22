@@ -627,7 +627,7 @@ mechanism.
 
 ```
 hemisphere/
-├── index.js                MCP stdio server (18 tool handlers)
+├── index.js                MCP stdio server (17 tool handlers)
 ├── dashboard.js            HTTP dashboard + SSE broadcast server
 ├── dashboard/
 │   ├── api-handler.js      Dashboard REST API routes
