@@ -106,12 +106,12 @@ function renderPreviewNav() {
 function renderPreviewMeta(m) {
   var el = document.getElementById('preview-meta');
   var parts = [];
+  if (m.project) {
+    parts.push('<span class="text-muted-foreground">' + esc(m.project) + '</span>');
+  }
   if (m.kind) {
     var k = (m.kind || '').toLowerCase();
     parts.push('<span class="' + (kindColors[k] || baseBadge + ' bg-muted text-muted-foreground') + '">' + esc(m.kind === 'progressive_summary' ? 'summary' : m.kind) + '</span>');
-  }
-  if (m.project) {
-    parts.push('<span class="text-muted-foreground">' + esc(m.project) + '</span>');
   }
   if (m.status) {
     parts.push('<span class="' + (kindStatusColors[(m.status || '').toLowerCase()] || baseBadge + ' bg-muted text-muted-foreground') + '">' + esc(m.status) + '</span>');
