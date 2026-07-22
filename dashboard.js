@@ -158,7 +158,7 @@ const server = http.createServer((req, res) => {
         }
         const projectPurgeMatch = pathname.match(/^\/api\/project\/purge$/);
         if (projectPurgeMatch && req.method === 'DELETE') {
-          broadcast('project_deleted', { id: null, project: params.get('project') || '' });
+          broadcast('project_purge', { id: null, project: params.get('project') || '' });
         }
         const projectTrashMatch = pathname.match(/^\/api\/project\/trash$/);
         if (projectTrashMatch && req.method === 'POST') {
