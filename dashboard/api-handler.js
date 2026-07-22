@@ -18,20 +18,23 @@ export function createApiHandler(db) {
 
     if (path === '/api/stats' && method === 'GET') {
       const project = params.get('project') || '';
-      let total, kinds;
+      let total, kinds, statuses;
       if (project) {
         total = db.prepare('SELECT COUNT(*) as c FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL').get(project).c;
         kinds = db.prepare('SELECT DISTINCT kind FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL ORDER BY kind').all(project).map(r => r.kind).filter(Boolean);
+        statuses = db.prepare("SELECT DISTINCT status FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL AND status != '' ORDER BY status").all(project).map(r => r.status).filter(Boolean);
       } else {
         total = db.prepare('SELECT COUNT(*) as c FROM memories WHERE deleted_at IS NULL AND archived_at IS NULL').get().c;
         kinds = db.prepare('SELECT DISTINCT kind FROM memories WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY kind').all().map(r => r.kind).filter(Boolean);
+        statuses = db.prepare("SELECT DISTINCT status FROM memories WHERE deleted_at IS NULL AND archived_at IS NULL AND status != '' ORDER BY status").all().map(r => r.status).filter(Boolean);
       }
-      return json({ total, kinds });
+      return json({ total, kinds, statuses });
     }
 
     if (path === '/api/memories' && method === 'GET') {
       const project = params.get('project') || '';
       const kind = params.get('kind') || '';
+      const status = params.get('status') || '';
       const search = params.get('search') || '';
       const trash = params.get('trash') === '1';
       const archived = params.get('archived') === '1';
@@ -41,8 +44,8 @@ export function createApiHandler(db) {
 
       if (search.trim()) {
         try {
-          const rows = searchHybrid({ project, query: search, limit, alpha: getConfig().search.alpha, archived });
-          return json({ total: rows.length, rows, limit, offset, search: true });
+          const { rows, total } = searchHybrid({ project, query: search, limit, offset, alpha: getConfig().search.alpha, archived, trash });
+          return json({ total, rows, limit, offset, search: true });
         } catch (e) {
           return err('Search error', 400);
         }
@@ -57,6 +60,10 @@ export function createApiHandler(db) {
       if (kind && kind !== 'all') {
         conditions.push('kind = ?');
         sqlParams.push(kind);
+      }
+      if (status && status !== 'all') {
+        conditions.push('status = ?');
+        sqlParams.push(status);
       }
       if (archived) {
         conditions.push('archived_at IS NOT NULL AND deleted_at IS NULL');
@@ -78,6 +85,26 @@ export function createApiHandler(db) {
       }));
 
       return json({ total, rows, limit, offset });
+    }
+
+    const getMatch = path.match(/^\/api\/memories\/(\d+)$/);
+    if (getMatch && method === 'GET') {
+      const id = parseInt(getMatch[1], 10);
+      const project = params.get('project') || '';
+      if (!id || !project) return err('Missing id or project', 400);
+      const row = db.prepare('SELECT * FROM memories WHERE id = ? AND project = ?').get(id, project);
+      if (!row) return err('Memory not found', 404);
+      const idStr = String(id);
+      const referencedBy = db.prepare(
+        "SELECT id, kind, status FROM memories WHERE project = ? AND deleted_at IS NULL AND archived_at IS NULL AND id != ? AND related_ids != '' AND (related_ids = ? OR related_ids LIKE ? OR related_ids LIKE ? OR related_ids LIKE ?)"
+      ).all(project, id, idStr, idStr + ',%', '%,' + idStr, '%,' + idStr + ',%');
+      return json({
+        ...row,
+        metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,
+        related_ids: row.related_ids ? row.related_ids.split(',').map(Number).filter(Boolean) : [],
+        referenced_by: referencedBy,
+        status: row.status || ''
+      });
     }
 
     const deleteMatch = path.match(/^\/api\/memories\/(\d+)$/);
@@ -119,7 +146,8 @@ export function createApiHandler(db) {
     if (path === '/api/purge' && method === 'POST') {
       const days = parseInt(params.get('days') || String(getConfig().retention.trashPurgeDays), 10);
       const purged = purgeExpired(days);
-      return json({ purged });
+      const livePurged = enforceLiveRetention();
+      return json({ purged, live_purged: livePurged });
     }
 
     if (path === '/api/backups' && method === 'GET') {

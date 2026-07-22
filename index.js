@@ -4,7 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-import { initDb, storeMemory, searchHybrid, listMemories, trashMemory, deleteMemory, updateMemory, restoreMemory, archiveMemory, unarchiveMemory, listProjects, countProject, trashProject, deleteProject, deleteMemoryPermanent, reassignMemories, getBrief } from './db.js';
+import { initDb, storeMemory, searchHybrid, listMemories, trashMemory, updateMemory, restoreMemory, archiveMemory, unarchiveMemory, listProjects, countProject, trashProject, deleteProject, deleteMemoryPermanent, reassignMemories, getBrief } from './db.js';
 import { getConfig } from './config.js';
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -49,7 +49,7 @@ process.on('SIGTERM', () => { try { db.close(); } catch {} process.exit(0); });
 process.on('SIGINT', () => { try { db.close(); } catch {} process.exit(0); });
 
 const server = new Server(
-  { name: 'hemisphere', version: '2.0.4' },
+  { name: 'hemisphere', version: '2.0.5' },
   { capabilities: { tools: {} } }
 );
 
@@ -82,6 +82,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           limit: { type: 'number', description: 'Max results (default 10)' },
           alpha: { type: 'number', description: 'Vector weight 0-1, 0=only FTS, 1=only vector (default 0.3)' },
           archived: { type: 'boolean', description: 'If true, search archived memories instead of active ones' },
+          trash: { type: 'boolean', description: 'If true, search soft-deleted (trashed) memories' },
           kind: { type: 'string', description: 'Optional. Filter by memory kind (fact, decision, bug, plan, note)' }
         },
         required: ['query']
@@ -97,6 +98,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           query: { type: 'string', description: 'Search query text' },
           limit: { type: 'number', description: 'Max results (default 10)' },
           archived: { type: 'boolean', description: 'If true, return context from archived memories instead of active ones' },
+          trash: { type: 'boolean', description: 'If true, return context from soft-deleted (trashed) memories' },
           kind: { type: 'string', description: 'Optional. Filter by memory kind (fact, decision, bug, plan, note)' }
         },
         required: ['query']
@@ -304,14 +306,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memory_search': {
-        const results = searchHybrid(args);
+        const { rows: results } = searchHybrid(args);
         return {
           content: [{ type: 'text', text: JSON.stringify(results, null, 2) }]
         };
       }
 
       case 'memory_context': {
-        const results = searchHybrid(args);
+        const { rows: results } = searchHybrid(args);
         if (results.length === 0) {
           return {
             content: [{ type: 'text', text: 'No relevant memories found.' }]
@@ -333,7 +335,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memory_trash': {
-        const deleted = deleteMemory(args.project, args.id);
+        const deleted = trashMemory(args.project, args.id);
         if (deleted) notifyDash('memory_trash', args.id, args.project);
         return {
           content: [{ type: 'text', text: JSON.stringify({ deleted }) }]

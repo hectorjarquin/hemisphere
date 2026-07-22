@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### Added
+- `trash` parameter on `memory_search` and `memory_context` — parity
+  with `memory_list` across all three lifecycle tiers (active, archived,
+  trashed). Enumeration-only is no longer the only path to trashed
+  content; search and context injection now support trashed memories.
+
+### Fixed
+- Dashboard `GET /api/memories?search=...&trash=1` now correctly passes
+  `trash` to `searchHybrid()` — previously the param was read from the
+  URL but silently ignored, returning active results instead of trashed.
+
 ## [2.0.5] - 2026-07-11
 
 ### Changed

@@ -64,6 +64,16 @@ export function initDb() {
   // Migration: add archived_at column — v1.2.0 (ignore if exists)
   try { db.exec('ALTER TABLE memories ADD COLUMN archived_at INTEGER DEFAULT NULL'); } catch {}
 
+  // Migration: expand FTS to include project, kind, status
+  try {
+    var colCount = db.prepare("SELECT COUNT(*) as c FROM pragma_table_info('memories_fts')").get().c;
+    if (colCount < 4) {
+      db.exec('DROP TABLE IF EXISTS memories_fts');
+      db.exec('CREATE VIRTUAL TABLE memories_fts USING fts5(project, kind, status, content, content=memories, content_rowid=id, tokenize=\'unicode61\')');
+      db.exec("INSERT INTO memories_fts (rowid, project, kind, status, content) SELECT id, project, kind, COALESCE(status,''), content FROM memories");
+    }
+  } catch {}
+
   return db;
 }
 
@@ -212,7 +222,7 @@ export function storeMemory({ project, kind, content, metadata, related_ids, sta
 
   const id = Number(result.lastInsertRowid);
 
-  d.prepare('INSERT INTO memories_fts (rowid, content) VALUES (?, ?)').run(id, content);
+  d.prepare('INSERT INTO memories_fts (rowid, project, kind, status, content) VALUES (?, ?, ?, ?, ?)').run(id, project, finalKind, meta.status || '', content);
 
   const embedding = createEmbedding(content);
   d.prepare('INSERT INTO memories_vec (rowid, embedding) VALUES (CAST(? AS INTEGER), ?)').run(id, Buffer.from(embedding.buffer));
@@ -236,16 +246,15 @@ function sanitizeFtsQuery(query) {
     .join(' ');
 }
 
-export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived, kind }) {
+export function searchHybrid({ project, query, limit = 10, offset = 0, alpha = 0.3, archived, trash, kind }) {
   const d = initDb();
   if (alpha < 0) alpha = 0;
   if (alpha > 1) alpha = 1;
   limit = Math.min(limit, 5000);
-  const K = limit * 3;
+  const K = (offset + limit) * 3;
   const useVector = alpha > 0;
 
   const ftsQuery = sanitizeFtsQuery(query);
-  if (!ftsQuery) return [];
 
   let queryEmbedding, queryBuf;
   if (useVector) {
@@ -253,42 +262,50 @@ export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived
     queryBuf = Buffer.from(queryEmbedding.buffer);
   }
 
+  if (!ftsQuery && !useVector) return [];
+
   let deletedClause, lookupClause;
   if (archived) {
     deletedClause = 'AND m.archived_at IS NOT NULL AND m.deleted_at IS NULL';
     lookupClause = 'archived_at IS NOT NULL AND deleted_at IS NULL';
+  } else if (trash) {
+    deletedClause = 'AND m.deleted_at IS NOT NULL';
+    lookupClause = 'deleted_at IS NOT NULL';
   } else {
     deletedClause = 'AND m.deleted_at IS NULL AND m.archived_at IS NULL';
     lookupClause = 'deleted_at IS NULL AND archived_at IS NULL';
   }
 
-  const ftsParams = [ftsQuery];
-  const ftsProjectClause = project ? 'AND m.project = ?' : '';
-  if (project) ftsParams.push(project);
-  const ftsKindClause = kind && kind.trim().length > 0 ? 'AND m.kind = ?' : '';
-  if (kind && kind.trim().length > 0) ftsParams.push(kind);
-  ftsParams.push(K);
-
-  const ftsResults = d.prepare(`
-    SELECT m.id, m.project, m.kind, m.related_ids, m.status, m.content, m.metadata, m.created_at, m.updated_at, m.deleted_at, m.archived_at,
-           f.rank as raw_rank
-    FROM (SELECT rowid, rank FROM memories_fts WHERE memories_fts MATCH ?) f
-    JOIN memories m ON m.id = f.rowid
-    WHERE 1=1 ${deletedClause} ${ftsProjectClause} ${ftsKindClause}
-    ORDER BY raw_rank
-    LIMIT ?
-  `).all(...ftsParams);
-
-  const ftsRawScores = ftsResults.map(r => -r.raw_rank);
-  const maxFtsScore = ftsRawScores.length > 0 ? Math.max(...ftsRawScores) : 1;
-
   const ftsMap = new Map();
-  for (let i = 0; i < ftsResults.length; i++) {
-    const r = ftsResults[i];
-    const norm = maxFtsScore > 0 ? ftsRawScores[i] / maxFtsScore : 0;
-    r.fts_score = Math.max(0, Math.min(1, norm));
-    r.vec_score = 0;
-    ftsMap.set(r.id, r);
+
+  if (ftsQuery) {
+    const ftsParams = [ftsQuery];
+    const ftsProjectClause = project ? 'AND m.project = ?' : '';
+    if (project) ftsParams.push(project);
+    const ftsKindClause = kind && kind.trim().length > 0 ? 'AND m.kind = ?' : '';
+    if (kind && kind.trim().length > 0) ftsParams.push(kind);
+    ftsParams.push(K);
+
+    const ftsResults = d.prepare(`
+      SELECT m.id, m.project, m.kind, m.related_ids, m.status, m.content, m.metadata, m.created_at, m.updated_at, m.deleted_at, m.archived_at,
+             f.rank as raw_rank
+      FROM (SELECT rowid, rank FROM memories_fts WHERE memories_fts MATCH ?) f
+      JOIN memories m ON m.id = f.rowid
+      WHERE 1=1 ${deletedClause} ${ftsProjectClause} ${ftsKindClause}
+      ORDER BY raw_rank
+      LIMIT ?
+    `).all(...ftsParams);
+
+    const ftsRawScores = ftsResults.map(r => -r.raw_rank);
+    const maxFtsScore = ftsRawScores.length > 0 ? Math.max(...ftsRawScores) : 1;
+
+    for (let i = 0; i < ftsResults.length; i++) {
+      const r = ftsResults[i];
+      const norm = maxFtsScore > 0 ? ftsRawScores[i] / maxFtsScore : 0;
+      r.fts_score = Math.max(0, Math.min(1, norm));
+      r.vec_score = 0;
+      ftsMap.set(r.id, r);
+    }
   }
 
   if (useVector) {
@@ -344,13 +361,14 @@ export function searchHybrid({ project, query, limit = 10, alpha = 0.3, archived
       score: alpha * r.vec_score + (1 - alpha) * r.fts_score
     }))
     .filter(r => r.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+    .sort((a, b) => b.score - a.score);
 
-  return results;
+  const total = results.length;
+
+  return { rows: results.slice(offset, offset + limit), total };
 }
 
-export function listMemories({ project, kind, trash, archived, limit = 20 }) {
+export function listMemories({ project, kind, trash = false, archived = false, limit = 20 }) {
   const d = initDb();
   let sql = 'SELECT * FROM memories WHERE project = ?';
   const params = [project];
@@ -407,9 +425,11 @@ export function updateMemory({ id, project, kind, content, metadata, related_ids
   sets.push('updated_at = unixepoch()');
 
   const existingMeta = JSON.parse(existing.metadata || '{}');
-  const incomingMeta = metadata !== undefined && metadata !== null ? { ...metadata } : {};
-  if (typeof incomingMeta === 'string') {
-    try { metadata = JSON.parse(incomingMeta); } catch { metadata = {}; }
+  let incomingMeta;
+  if (typeof metadata === 'string') {
+    try { incomingMeta = JSON.parse(metadata); } catch { incomingMeta = {}; }
+  } else {
+    incomingMeta = metadata !== undefined && metadata !== null ? { ...metadata } : {};
   }
   if (status !== undefined && status !== null) {
     incomingMeta.status = status;
@@ -424,8 +444,11 @@ export function updateMemory({ id, project, kind, content, metadata, related_ids
   const result = d.prepare(`UPDATE memories SET ${sets.join(', ')} WHERE id = ? AND project = ?`).run(...params);
 
   if (result.changes > 0) {
+    var current = d.prepare('SELECT kind, status, content FROM memories WHERE id = ?').get(id);
+    var ftsContent = content !== undefined && content !== null ? content : (current ? current.content : '');
+    d.prepare('UPDATE memories_fts SET project = ?, kind = ?, status = ?, content = ? WHERE rowid = ?').run(project, current.kind, current.status || '', ftsContent, id);
+
     if (content !== undefined && content !== null) {
-      d.prepare('UPDATE memories_fts SET content = ? WHERE rowid = ?').run(content, id);
 
       const embedding = createEmbedding(content);
       d.prepare('DELETE FROM memories_vec WHERE rowid = CAST(? AS INTEGER)').run(id);
@@ -443,10 +466,6 @@ export function trashMemory(project, id) {
   const result = d.prepare('UPDATE memories SET deleted_at = unixepoch() WHERE id = ? AND project = ? AND deleted_at IS NULL').run(id, project);
   if (result.changes > 0) recordWrite();
   return result.changes > 0;
-}
-
-export function deleteMemory(project, id) {
-  return trashMemory(project, id);
 }
 
 export function listProjects() {
