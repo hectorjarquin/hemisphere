@@ -5,16 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-07-21
+
 ### Added
-- `trash` parameter on `memory_search` and `memory_context` — parity
-  with `memory_list` across all three lifecycle tiers (active, archived,
-  trashed). Enumeration-only is no longer the only path to trashed
-  content; search and context injection now support trashed memories.
+- Dashboard redesign: Basecoat component library + Tailwind CSS v4 with
+  shadcn design tokens (Atkinson Hyperlegible fonts, `.dark` class theme
+  toggle, local static assets, zero CDN dependency)
+- `trash` parameter on `memory_search` and `memory_context` — parity with
+  `memory_list` across all three lifecycle tiers (active, archived, trashed)
+- FTS5 index expanded to include `project`, `kind`, and `status` alongside
+  `content` — richer keyword search with automatic migration
+- Search pagination: `offset` parameter on `searchHybrid()`, returning
+  `{ rows, total }` for proper frontend paging through all search paths
+- `GET /api/memories/:id` — single-memory API endpoint with `referenced_by`
+  for ancestor traversal
+- Status filter on `/api/memories` via `status=` query param; `/api/stats`
+  now returns available `statuses` for the dashboard filter dropdown
+- Vector-only search for short queries (< 3 characters) — previously
+  discarded by FTS5 tokenizer guard, now routed to vector search when
+  `alpha > 0`
+- `enforceLiveRetention()` now triggers automatically via the dashboard's
+  hourly auto-purge (was manual-only REST endpoint)
+
+### Changed
+- `searchHybrid()` return signature: array → `{ rows, total }` for
+  pagination support (both MCP handlers and dashboard API updated)
+- `listMemories()`: `trash` and `archived` parameters now default to
+  `false` explicitly (prevents false-match if `null`/`0` passed)
+- Dashboard view dropdown: Active / Archived / Trash (was Active / Deleted)
+- Dashboard table styles: bottom-border header (no solid background),
+  tighter row padding (8px/6px), `:focus` replaces `:focus-within`
 
 ### Fixed
-- Dashboard `GET /api/memories?search=...&trash=1` now correctly passes
-  `trash` to `searchHybrid()` — previously the param was read from the
-  URL but silently ignored, returning active results instead of trashed.
+- `updateMemory()` string metadata parsing order: `JSON.parse()` before
+  object spread (previously JSON strings corrupted into indexed objects)
+- Dashboard search on trashed items now correctly passes `trash` parameter
+  to `searchHybrid()` (param was read from URL but silently ignored)
+- Stale MCP server version string in `index.js` (was `2.0.4`, now `2.1.0`)
 
 ## [2.0.5] - 2026-07-11
 
@@ -22,14 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Table styles: bottom-border header (no solid background), tighter row
   padding (8px/6px), `:focus` replaces `:focus-within`, no hover transition.
   Matches Cordenar and Compend dashboard styling.
-
-## [2.0.3] - 2026-07-06
-
-### Changed
-- Updated Memory Best Practices in README — now matches the current
-  instruction file with ownership framing, kind filter guidance,
-  mandatory pre-decision search, session-end audit, and insight
-  storage conventions.
 
 ## [2.0.4] - 2026-07-11
 
@@ -41,6 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (comma-separated). Opt-in — empty array preserves existing behavior.
 - Manifest resolution: when a subscriber name is configured, Hemisphere reads
   `~/.{name}/manifest.json` at notify-time for the target endpoint URL.
+
+## [2.0.3] - 2026-07-06
+
+### Changed
+- Updated Memory Best Practices in README — now matches the current
+  instruction file with ownership framing, kind filter guidance,
+  mandatory pre-decision search, session-end audit, and insight
+  storage conventions.
 
 ## [2.0.2] - 2026-07-06
 

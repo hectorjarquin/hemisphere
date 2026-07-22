@@ -60,7 +60,7 @@ Browse, search and manage memories visually at `http://localhost:3456`.
 
 Port configurable via `~/.hemisphere/config.json` or `HEMISPHERE_PORT`.
 
-**Features:** dark/light theme toggle with SVG icon, WCAG 2.1 AA accessibility (keyboard navigation, ARIA labels, focus-visible outlines), real-time SSE updates (no polling), toast notifications, skeleton loading, search with debounce and prefix matching, project and kind filters, View dropdown (Active / Deleted), expandable detail rows, delete with native `<dialog>` confirmation, restore and permanent purge of soft-deleted memories, on-demand backups.
+**Features:** dark/light theme toggle with SVG icon, WCAG 2.1 AA accessibility (keyboard navigation, ARIA labels, focus-visible outlines), real-time SSE updates (no polling), toast notifications, skeleton loading, search with debounce and prefix matching, project, kind, and status filters, View dropdown (Active / Archived / Trash), preview modal with navigation history, expandable detail rows, delete with native `<dialog>` confirmation, restore and permanent purge of soft-deleted memories, on-demand backups.
 
 ## Installation
 
@@ -205,6 +205,7 @@ Hybrid FTS + vector search with weighted scoring.
 | `limit` | number | no | `10` | Max results |
 | `alpha` | number | no | `0.3` | Vector weight. `0` = FTS-only, `1` = vector-only |
 | `archived` | boolean | no | `false` | If true, search archived memories instead of active ones |
+| `trash` | boolean | no | `false` | If true, search soft-deleted (trashed) memories |
 | `kind` | string | no | — | Filter by memory kind (fact, decision, bug, plan, note) |
 
 Returns memories sorted by relevance (score 0–1).
@@ -219,6 +220,7 @@ Same as `memory_search` but returns plain text formatted for prompt injection.
 | `query` | string | yes | — | Search text |
 | `limit` | number | no | `10` | Max results |
 | `archived` | boolean | no | `false` | If true, search archived memories instead of active ones |
+| `trash` | boolean | no | `false` | If true, search soft-deleted (trashed) memories |
 | `kind` | string | no | — | Filter by memory kind (fact, decision, bug, plan, note) |
 
 Output:
@@ -386,8 +388,9 @@ The dashboard exposes REST endpoints:
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/projects` | List distinct project namespaces |
-| `GET` | `/api/stats` | Get counts grouped by kind and project |
-| `GET` | `/api/memories?project=&kind=&limit=&offset=&trash=` | Paginated memory list. `trash=1` shows soft-deleted. `search=` triggers FTS+vector. |
+| `GET` | `/api/stats` | Get counts grouped by kind, project, and status |
+| `GET` | `/api/memories?project=&kind=&status=&limit=&offset=&trash=&archived=` | Paginated memory list. `trash=1` shows soft-deleted, `archived=1` shows archived. `search=` triggers FTS+vector. |
+| `GET` | `/api/memories/:id?project=` | Get single memory with `referenced_by` ancestry |
 | `POST` | `/api/notify` | SSE event relay from MCP server (internal — called by `notifyDash()`) |
 | `DELETE` | `/api/memories/:id?project=` | Soft-delete a memory (sets `deleted_at`) |
 | `POST` | `/api/memories/:id/restore?project=` | Restore a soft-deleted memory (clears `deleted_at`) |
@@ -561,7 +564,7 @@ Three indexing layers work together:
 
 - WAL journal mode for concurrent reads, `busy_timeout=5000ms` for write-contention safety across processes
 - `memories` table (project, kind, content, metadata, related_ids, status, created_at, updated_at, deleted_at, archived_at)
-- `memories_fts` — FTS5 external content table
+- `memories_fts` — FTS5 external content table with `project`, `kind`, `status`, `content`
 - `memories_vec` — `vec0` table with `float[256]`
 
 ### Memory Lifecycle
@@ -624,14 +627,20 @@ mechanism.
 
 ```
 hemisphere/
-├── index.js                MCP stdio server (9 tool handlers)
+├── index.js                MCP stdio server (18 tool handlers)
 ├── dashboard.js            HTTP dashboard + SSE broadcast server
 ├── dashboard/
 │   ├── api-handler.js      Dashboard REST API routes
 │   └── public/
 │       ├── index.html      Dashboard HTML + ARIA structure
-│       ├── style.css       Full theme (dark/light), toast, dialog, skeleton
-│       └── app.js          Frontend SSE client, keyboard nav, WCAG 2.1 AA
+│       ├── tokens.css      Shadcn design tokens + font-face
+│       ├── style.css       Dashboard layout, skeleton, toast, dialog
+│       ├── app.js          Frontend SSE client, filters, preview modal
+│       ├── tailwind-v4.js  Tailwind CSS v4 JIT (local, no CDN)
+│       ├── basecoat-base.min.css  Basecoat component library
+│       ├── basecoat-all.min.js    Basecoat JS controllers
+│       ├── fonts/           Atkinson Hyperlegible (4 weights)
+│       └── logo.svg
 ├── db.js                   SQLite init, CRUD, hybrid FTS+vec search, lifecycle
 ├── embedding.js            MurmurHash3 → 256-dim float vector
 ├── config.js               Config loader (defaults ← config.json ← env vars)
